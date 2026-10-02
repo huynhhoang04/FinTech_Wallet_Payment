@@ -5,8 +5,8 @@ import com.fintech.wallet.common.security.JwtUtils;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
+import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -21,19 +21,20 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class JwtConfigTest {
 
 	// Same length as the dev default in application.yml (49 bytes): long enough that an unpinned
-	// signer would emit HS384 while NimbusJwtDecoder expects HS256.
+	// signer would emit HS384 while the decoder expects HS256.
 	private static final String SECRET = Base64.getEncoder()
 			.encodeToString("fintech-wallet-dev-only-jwt-secret-key-0123456789".getBytes(StandardCharsets.UTF_8));
 
-	private final JwtDecoder decoder = new JwtConfig().jwtDecoder(SECRET);
+	private final ReactiveJwtDecoder decoder = new JwtConfig().reactiveJwtDecoder(SECRET);
 	private final JwtAuthoritiesConverter authoritiesConverter = new JwtAuthoritiesConverter();
 
 	@Test
 	void decodesTokenIssuedByCommonJwtUtils() {
 		String token = new JwtUtils(SECRET).generate("user-1", Map.of("role", Roles.USER), Duration.ofMinutes(5));
 
-		Jwt jwt = decoder.decode(token);
+		Jwt jwt = decoder.decode(token).block();
 
+		assertThat(jwt).isNotNull();
 		assertThat(jwt.getSubject()).isEqualTo("user-1");
 		assertThat(jwt.getClaimAsString("role")).isEqualTo(Roles.USER);
 	}
@@ -44,7 +45,7 @@ class JwtConfigTest {
 				.encodeToString("another-different-test-secret-key-0123456789".getBytes(StandardCharsets.UTF_8));
 		String token = new JwtUtils(otherSecret).generate("user-1", Map.of(), Duration.ofMinutes(5));
 
-		assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(JwtException.class);
+		assertThatThrownBy(() -> decoder.decode(token).block()).isInstanceOf(JwtException.class);
 	}
 
 	@Test
