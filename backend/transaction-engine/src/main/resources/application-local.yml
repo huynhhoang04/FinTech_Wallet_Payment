@@ -1,0 +1,11 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/${TX_DB:tx_db}
+    username: ${POSTGRES_USER:wallet}
+    password: ${POSTGRES_PASSWORD:wallet}
+
+app:
+  ledger:
+    grpc-address: localhost:9090
+  outbox:
+    enabled: false

@@ -14,6 +14,8 @@ service LedgerService {
   rpc Withdraw     (WithdrawRequest)     returns (LedgerResult);
   rpc GetBalance   (GetBalanceRequest)   returns (GetBalanceResponse);
   rpc GetStatement (GetStatementRequest) returns (GetStatementResponse);
+  rpc GetAccountByNumber (GetAccountByNumberRequest) returns (AccountSummary);
+  rpc GetLedgerEntries   (GetLedgerEntriesRequest)   returns (GetLedgerEntriesResponse);
 }
 
 message PostTransferRequest {
@@ -78,10 +80,31 @@ message LedgerEntryDto {
   string direction = 3;
   int64 balance_after = 4;
   int64 at_epoch_ms = 5;
+  string account_id = 6;
 }
 
 message GetStatementResponse {
   repeated LedgerEntryDto entries = 1;
   int64 opening_balance = 2;
   int64 closing_balance = 3;
+}
+
+message GetAccountByNumberRequest {
+  string account_number = 1;
+}
+
+message AccountSummary {
+  string account_id = 1;
+  string account_number = 2;
+  string currency = 3;
+  string status = 4;
+}
+
+message GetLedgerEntriesRequest {
+  string transaction_id = 1;
+}
+
+message GetLedgerEntriesResponse {
+  repeated LedgerEntryDto entries = 1;
+  int64 sum = 2;
 }

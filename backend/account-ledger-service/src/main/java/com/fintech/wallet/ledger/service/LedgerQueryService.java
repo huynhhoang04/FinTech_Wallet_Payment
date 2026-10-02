@@ -56,6 +56,26 @@ public class LedgerQueryService {
 				ledgerEntryRepository.sumBefore(accountId, to));
 	}
 
+	@Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED)
+	public AccountInfo accountByNumber(String accountNumber) {
+		return accountRepository.findByAccountNumber(accountNumber)
+				.map(account -> new AccountInfo(account.getId(), account.getAccountNumber(), account.getCurrency(),
+						account.getStatus().name()))
+				.orElseThrow(() -> new BusinessException(ErrorCode.ACCOUNT_NOT_FOUND));
+	}
+
+	@Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED)
+	public EntriesView entriesOf(UUID transactionId) {
+		List<LedgerEntry> entries = ledgerEntryRepository.findByTransactionId(transactionId);
+		return new EntriesView(transactionId, entries, entries.stream().mapToLong(LedgerEntry::getAmount).sum());
+	}
+
+	public record AccountInfo(UUID accountId, String accountNumber, String currency, String status) {
+	}
+
+	public record EntriesView(UUID transactionId, List<LedgerEntry> entries, long sum) {
+	}
+
 	private Account requireAccount(UUID accountId) {
 		return accountRepository.findById(accountId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.ACCOUNT_NOT_FOUND));

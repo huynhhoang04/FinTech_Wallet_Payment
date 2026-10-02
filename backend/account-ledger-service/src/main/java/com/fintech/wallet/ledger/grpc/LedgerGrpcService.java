@@ -2,6 +2,7 @@ package com.fintech.wallet.ledger.grpc;
 
 import com.fintech.wallet.common.error.BusinessException;
 import com.fintech.wallet.common.error.ErrorCode;
+import com.fintech.wallet.ledger.domain.LedgerEntry;
 import com.fintech.wallet.ledger.domain.LedgerStatus;
 import com.fintech.wallet.ledger.service.AccountPostingResult;
 import com.fintech.wallet.ledger.service.BalanceView;
@@ -9,9 +10,13 @@ import com.fintech.wallet.ledger.service.LedgerPostingService;
 import com.fintech.wallet.ledger.service.LedgerQueryService;
 import com.fintech.wallet.ledger.service.StatementView;
 import com.fintech.wallet.ledger.service.TransferResult;
+import com.fintech.wallet.proto.ledger.AccountSummary;
 import com.fintech.wallet.proto.ledger.DepositRequest;
+import com.fintech.wallet.proto.ledger.GetAccountByNumberRequest;
 import com.fintech.wallet.proto.ledger.GetBalanceRequest;
 import com.fintech.wallet.proto.ledger.GetBalanceResponse;
+import com.fintech.wallet.proto.ledger.GetLedgerEntriesRequest;
+import com.fintech.wallet.proto.ledger.GetLedgerEntriesResponse;
 import com.fintech.wallet.proto.ledger.GetStatementRequest;
 import com.fintech.wallet.proto.ledger.GetStatementResponse;
 import com.fintech.wallet.proto.ledger.LedgerEntryDto;
@@ -129,19 +134,52 @@ public class LedgerGrpcService extends LedgerServiceGrpc.LedgerServiceImplBase {
 			GetStatementResponse.Builder response = GetStatementResponse.newBuilder()
 					.setOpeningBalance(statement.openingBalance())
 					.setClosingBalance(statement.closingBalance());
-			statement.entries().forEach(entry -> response.addEntries(LedgerEntryDto.newBuilder()
-					.setEntryId(entry.getId().toString())
-					.setAmountSigned(entry.getAmount())
-					.setDirection(entry.getDirection().name())
-					.setBalanceAfter(entry.getBalanceAfter())
-					.setAtEpochMs(entry.getCreatedAt().toEpochMilli())
-					.build()));
+			statement.entries().forEach(entry -> response.addEntries(toDto(entry)));
 			respond(responseObserver, response.build());
 		} catch (BusinessException e) {
 			responseObserver.onError(grpcStatusOf(e).asRuntimeException());
 		} catch (IllegalArgumentException e) {
 			responseObserver.onError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()).asRuntimeException());
 		}
+	}
+
+	@Override
+	public void getAccountByNumber(GetAccountByNumberRequest request, StreamObserver<AccountSummary> responseObserver) {
+		try {
+			LedgerQueryService.AccountInfo account = queryService.accountByNumber(request.getAccountNumber());
+			respond(responseObserver, AccountSummary.newBuilder()
+					.setAccountId(account.accountId().toString())
+					.setAccountNumber(account.accountNumber())
+					.setCurrency(account.currency())
+					.setStatus(account.status())
+					.build());
+		} catch (BusinessException e) {
+			responseObserver.onError(grpcStatusOf(e).asRuntimeException());
+		}
+	}
+
+	@Override
+	public void getLedgerEntries(GetLedgerEntriesRequest request,
+			StreamObserver<GetLedgerEntriesResponse> responseObserver) {
+		try {
+			LedgerQueryService.EntriesView entries = queryService.entriesOf(toUuid(request.getTransactionId()));
+			GetLedgerEntriesResponse.Builder response = GetLedgerEntriesResponse.newBuilder().setSum(entries.sum());
+			entries.entries().forEach(entry -> response.addEntries(toDto(entry)));
+			respond(responseObserver, response.build());
+		} catch (IllegalArgumentException e) {
+			responseObserver.onError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()).asRuntimeException());
+		}
+	}
+
+	private static LedgerEntryDto toDto(LedgerEntry entry) {
+		return LedgerEntryDto.newBuilder()
+				.setEntryId(entry.getId().toString())
+				.setAmountSigned(entry.getAmount())
+				.setDirection(entry.getDirection().name())
+				.setBalanceAfter(entry.getBalanceAfter())
+				.setAtEpochMs(entry.getCreatedAt().toEpochMilli())
+				.setAccountId(entry.getAccountId().toString())
+				.build();
 	}
 
 	private static LedgerResult toLedgerResult(AccountPostingResult result) {

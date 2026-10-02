@@ -1,0 +1,78 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: transaction-engine
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${TX_DB:tx_db}
+    username: ${POSTGRES_USER:wallet}
+    password: ${POSTGRES_PASSWORD:wallet}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://${EUREKA_USER:eureka}:${EUREKA_PASSWORD:eureka-local}@${EUREKA_HOST:localhost}:8761/eureka
+  instance:
+    prefer-ip-address: true
+
+app:
+  security:
+    jwt-secret: ${JWT_SECRET:ZmludGVjaC13YWxsZXQtZGV2LW9ubHktand0LXNlY3JldC1rZXktMDEyMzQ1Njc4OQ==}
+  ledger:
+    grpc-address: ${LEDGER_GRPC_ADDRESS:localhost:9090}
+  lock:
+    wait: 3s
+    lease: 10s
+  fraud:
+    amount-limit: 50000000
+    velocity-max: 10
+    velocity-window: 60s
+  outbox:
+    enabled: true
+    interval-ms: 10000
+  logging:
+    request-flow: true
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      ledger:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+  retry:
+    instances:
+      ledgerRead:
+        maxAttempts: 3
+        waitDuration: 200ms
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
