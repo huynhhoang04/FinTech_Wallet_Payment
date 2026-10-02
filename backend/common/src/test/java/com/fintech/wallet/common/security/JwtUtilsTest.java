@@ -3,6 +3,7 @@ package com.fintech.wallet.common.security;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.WeakKeyException;
 import org.junit.jupiter.api.Test;
 
@@ -44,5 +45,17 @@ class JwtUtilsTest {
 		String shortSecret = Base64.getEncoder().encodeToString("too-short".getBytes(StandardCharsets.UTF_8));
 
 		assertThatThrownBy(() -> new JwtUtils(shortSecret)).isInstanceOf(WeakKeyException.class);
+	}
+
+	@Test
+	void alwaysSignsWithHs256EvenWithASecretLongEnoughForStrongerAlgorithms() {
+		// 49 bytes would make jjwt pick HS384 on its own, while NimbusJwtDecoder defaults to HS256.
+		String longSecret = Base64.getEncoder()
+				.encodeToString("fintech-wallet-dev-only-jwt-secret-key-0123456789".getBytes(StandardCharsets.UTF_8));
+
+		String token = new JwtUtils(longSecret).generate("user-1", Map.of(), Duration.ofMinutes(5));
+
+		assertThat(Jwts.parser().verifyWith(JwtUtils.secretKey(longSecret)).build()
+				.parseSignedClaims(token).getHeader().getAlgorithm()).isEqualTo("HS256");
 	}
 }

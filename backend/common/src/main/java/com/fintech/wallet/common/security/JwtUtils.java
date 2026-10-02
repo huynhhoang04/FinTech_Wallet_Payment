@@ -31,7 +31,7 @@ public class JwtUtils {
 				.subject(subject)
 				.issuedAt(Date.from(now))
 				.expiration(Date.from(now.plus(ttl)))
-				.signWith(key)
+				.signWith(key, Jwts.SIG.HS256)
 				.compact();
 	}
 

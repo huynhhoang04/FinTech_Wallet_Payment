@@ -20,8 +20,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class JwtConfigTest {
 
+	// Same length as the dev default in application.yml (49 bytes): long enough that an unpinned
+	// signer would emit HS384 while NimbusJwtDecoder expects HS256.
 	private static final String SECRET = Base64.getEncoder()
-			.encodeToString("fintech-wallet-test-jwt-secret-key-0123456789".getBytes(StandardCharsets.UTF_8));
+			.encodeToString("fintech-wallet-dev-only-jwt-secret-key-0123456789".getBytes(StandardCharsets.UTF_8));
 
 	private final JwtDecoder decoder = new JwtConfig().jwtDecoder(SECRET);
 	private final JwtAuthoritiesConverter authoritiesConverter = new JwtAuthoritiesConverter();
