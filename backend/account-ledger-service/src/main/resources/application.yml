@@ -33,6 +33,8 @@ app:
     jwt-secret: ${JWT_SECRET:ZmludGVjaC13YWxsZXQtZGV2LW9ubHktand0LXNlY3JldC1rZXktMDEyMzQ1Njc4OQ==}
     access-token-ttl: 15m
     refresh-token-ttl: 7d
+  logging:
+    request-flow: true
 
 management:
   endpoints:

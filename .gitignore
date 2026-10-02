@@ -21,6 +21,7 @@ target/
 node_modules/
 .expo/
 web-build/
+dist/
 
 # OS
 .DS_Store

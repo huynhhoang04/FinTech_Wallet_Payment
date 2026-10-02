@@ -1,0 +1,113 @@
+body {
+  margin: 0;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  background: #10131a;
+  color: #d7dce5;
+}
+
+main {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 24px 16px 60px;
+}
+
+h1 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+p.hint {
+  color: #8b93a7;
+  margin: 0 0 20px;
+}
+
+fieldset {
+  border: 1px solid #262c3a;
+  border-radius: 6px;
+  padding: 12px 14px 16px;
+  margin: 0 0 16px;
+}
+
+legend {
+  color: #8b93a7;
+  padding: 0 6px;
+}
+
+label {
+  display: block;
+  margin-bottom: 10px;
+}
+
+label span {
+  display: block;
+  color: #8b93a7;
+  margin-bottom: 3px;
+}
+
+input {
+  width: 100%;
+  box-sizing: border-box;
+  background: #171b24;
+  border: 1px solid #2c3446;
+  border-radius: 4px;
+  color: inherit;
+  padding: 6px 8px;
+  font: inherit;
+}
+
+button {
+  background: #24406b;
+  border: 1px solid #35608f;
+  border-radius: 4px;
+  color: #dce7f5;
+  padding: 6px 12px;
+  font: inherit;
+  cursor: pointer;
+  margin: 0 6px 6px 0;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.step {
+  border-left: 3px solid #2f3a4d;
+  padding: 8px 0 8px 12px;
+  margin-bottom: 12px;
+}
+
+.step.ok {
+  border-left-color: #2f7d4f;
+}
+
+.step.fail {
+  border-left-color: #8d3a3a;
+}
+
+.step .line {
+  color: #8b93a7;
+}
+
+.step .line b {
+  color: #d7dce5;
+  font-weight: 600;
+}
+
+pre {
+  background: #171b24;
+  border: 1px solid #262c3a;
+  border-radius: 4px;
+  padding: 8px;
+  overflow-x: auto;
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.tokens {
+  color: #7fb3d5;
+  word-break: break-all;
+}

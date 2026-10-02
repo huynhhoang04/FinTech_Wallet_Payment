@@ -10,3 +10,7 @@ eureka:
       defaultZone: http://${EUREKA_USER:eureka}:${EUREKA_PASSWORD:eureka-local}@eureka-server:8761/eureka
   instance:
     prefer-ip-address: true
+
+app:
+  logging:
+    request-flow: false
