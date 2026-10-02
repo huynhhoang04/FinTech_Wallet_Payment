@@ -25,6 +25,14 @@ import java.util.UUID;
 /**
  * Money write path. Accounts are always locked in ascending accountId order, all at once, before
  * any balance is read; that ordering is what keeps concurrent A->B and B->A transfers deadlock free.
+ *
+ * <p>Isolation is READ_COMMITTED, not REPEATABLE_READ. Under REPEATABLE_READ PostgreSQL raises
+ * SQLState 40001 ("could not serialize access due to concurrent update") when a transaction locks a
+ * row changed by another transaction after its snapshot was taken, aborting the posting; measured
+ * with 25 concurrent A-&gt;B / B-&gt;A pairs, 43 of 50 postings failed that way. The ascending row
+ * locks already serialise every writer of the involved accounts and READ_COMMITTED re-reads the
+ * latest committed balance after the lock is granted, so correctness does not depend on the
+ * snapshot isolation level.
  */
 @Service
 public class LedgerPostingService {
@@ -41,7 +49,7 @@ public class LedgerPostingService {
 		this.ledgerEntryRepository = ledgerEntryRepository;
 	}
 
-	@Transactional(isolation = Isolation.REPEATABLE_READ)
+	@Transactional(isolation = Isolation.READ_COMMITTED)
 	public TransferResult postTransfer(UUID transactionId, UUID sourceAccountId, UUID targetAccountId, long amount,
 			String currency, String reference) {
 		Optional<TransferResult> replay = replayTransfer(transactionId, sourceAccountId, targetAccountId);
@@ -71,7 +79,7 @@ public class LedgerPostingService {
 		return new TransferResult(transactionId, LedgerStatus.POSTED, sourceAfter, targetAfter);
 	}
 
-	@Transactional(isolation = Isolation.REPEATABLE_READ)
+	@Transactional(isolation = Isolation.READ_COMMITTED)
 	public AccountPostingResult deposit(UUID transactionId, UUID walletAccountId, long amount, String currency,
 			String channel) {
 		Optional<AccountPostingResult> replay = replayAccountPosting(transactionId, walletAccountId);
@@ -96,7 +104,7 @@ public class LedgerPostingService {
 		return new AccountPostingResult(transactionId, LedgerStatus.POSTED, walletAfter);
 	}
 
-	@Transactional(isolation = Isolation.REPEATABLE_READ)
+	@Transactional(isolation = Isolation.READ_COMMITTED)
 	public AccountPostingResult withdraw(UUID transactionId, UUID walletAccountId, long amount, String currency,
 			String channel) {
 		Optional<AccountPostingResult> replay = replayAccountPosting(transactionId, walletAccountId);
