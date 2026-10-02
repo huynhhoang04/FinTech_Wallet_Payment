@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package common.v1;
+
+option java_multiple_files = true;
+option java_package = "com.fintech.wallet.proto.common";
+option java_outer_classname = "CommonProto";
+
+message Money {
+  int64 amount = 1;
+  string currency = 2;
+}
+
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  INSUFFICIENT_FUNDS = 1;
+  ACCOUNT_LOCKED = 2;
+  ACCOUNT_NOT_FOUND = 3;
+  CURRENCY_MISMATCH = 4;
+  INVALID_AMOUNT = 5;
+  DUPLICATE_TRANSACTION = 6;
+}
+
+message Empty {}

@@ -1,0 +1,89 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  cloud:
+    gateway:
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: false
+          routes:
+            - id: auth
+              uri: lb://account-ledger-service
+              predicates:
+                - Path=/api/v1/auth/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@ipKeyResolver}"
+                    redis-rate-limiter.replenishRate: 1
+                    redis-rate-limiter.burstCapacity: 10
+            - id: transactions
+              uri: lb://transaction-engine
+              predicates:
+                - Path=/api/v1/transactions/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@ipKeyResolver}"
+                    redis-rate-limiter.replenishRate: 20
+                    redis-rate-limiter.burstCapacity: 40
+                - name: CircuitBreaker
+                  args:
+                    name: transactionEngineCircuitBreaker
+            - id: accounts
+              uri: lb://transaction-engine
+              predicates:
+                - Path=/api/v1/accounts/**
+            - id: payments
+              uri: lb://payment-gateway-service
+              predicates:
+                - Path=/api/v1/payments/**
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@ipKeyResolver}"
+                    redis-rate-limiter.replenishRate: 5
+                    redis-rate-limiter.burstCapacity: 10
+            - id: webhooks
+              uri: lb://payment-gateway-service
+              predicates:
+                - Path=/webhooks/**
+            - id: notifications
+              uri: lb://notification-service
+              predicates:
+                - Path=/api/v1/notifications/**
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://${EUREKA_USER:eureka}:${EUREKA_PASSWORD:eureka-local}@${EUREKA_HOST:localhost}:8761/eureka
+  instance:
+    prefer-ip-address: true
+
+app:
+  security:
+    jwt-secret: ${JWT_SECRET:ZmludGVjaC13YWxsZXQtZGV2LW9ubHktand0LXNlY3JldC1rZXktMDEyMzQ1Njc4OQ==}
+  hmac:
+    secret: ${HMAC_SECRET:dev-only-hmac-secret}
+    max-skew-seconds: ${HMAC_MAX_SKEW_SECONDS:300}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,gateway
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}

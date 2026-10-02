@@ -1,0 +1,47 @@
+server:
+  port: 8082
+
+grpc:
+  server:
+    port: 9090
+
+spring:
+  application:
+    name: account-ledger-service
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${LEDGER_DB:ledger_db}
+    username: ${POSTGRES_USER:wallet}
+    password: ${POSTGRES_PASSWORD:wallet}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://${EUREKA_USER:eureka}:${EUREKA_PASSWORD:eureka-local}@${EUREKA_HOST:localhost}:8761/eureka
+  instance:
+    prefer-ip-address: true
+
+app:
+  security:
+    jwt-secret: ${JWT_SECRET:ZmludGVjaC13YWxsZXQtZGV2LW9ubHktand0LXNlY3JldC1rZXktMDEyMzQ1Njc4OQ==}
+    access-token-ttl: 15m
+    refresh-token-ttl: 7d
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
