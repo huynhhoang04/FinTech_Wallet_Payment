@@ -1,0 +1,14 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/${LEDGER_DB:ledger_db}
+    username: ${POSTGRES_USER:wallet}
+    password: ${POSTGRES_PASSWORD:wallet}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://${EUREKA_USER:eureka}:${EUREKA_PASSWORD:eureka-local}@localhost:8761/eureka
+
+app:
+  security:
+    jwt-secret: ${JWT_SECRET:ZmludGVjaC13YWxsZXQtZGV2LW9ubHktand0LXNlY3JldC1rZXktMDEyMzQ1Njc4OQ==}

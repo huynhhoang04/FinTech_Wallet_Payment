@@ -6,6 +6,7 @@ import com.fintech.wallet.common.error.GlobalExceptionHandler;
 import com.fintech.wallet.ledger.dto.LoginRequest;
 import com.fintech.wallet.ledger.dto.LoginResponse;
 import com.fintech.wallet.ledger.service.AuthService;
+import com.fintech.wallet.ledger.service.OtpService;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -21,8 +22,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AuthControllerErrorShapeTest {
 
 	private final AuthService authService = mock(AuthService.class);
+	private final OtpService otpService = mock(OtpService.class);
 	private final MockMvc mockMvc = MockMvcBuilders
-			.standaloneSetup(new AuthController(authService))
+			.standaloneSetup(new AuthController(authService, otpService))
 			.setControllerAdvice(new GlobalExceptionHandler())
 			.build();
 
@@ -56,5 +58,13 @@ class AuthControllerErrorShapeTest {
 				.andExpect(jsonPath("$.refreshToken").value("refresh-token"))
 				.andExpect(jsonPath("$.tokenType").value("Bearer"))
 				.andExpect(jsonPath("$.expiresIn").value(900));
+	}
+
+	@Test
+	void otpRequestRequiresAnAuthenticatedUser() throws Exception {
+		mockMvc.perform(post("/api/v1/auth/otp/request"))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.code").value("UNAUTHENTICATED"))
+				.andExpect(jsonPath("$.path").value("/api/v1/auth/otp/request"));
 	}
 }

@@ -3,11 +3,15 @@ package com.fintech.wallet.ledger.controller;
 import com.fintech.wallet.common.security.CurrentUser;
 import com.fintech.wallet.ledger.dto.LoginRequest;
 import com.fintech.wallet.ledger.dto.LoginResponse;
+import com.fintech.wallet.ledger.dto.OtpRequestResponse;
+import com.fintech.wallet.ledger.dto.OtpVerifyRequest;
+import com.fintech.wallet.ledger.dto.OtpVerifyResponse;
 import com.fintech.wallet.ledger.dto.RefreshRequest;
 import com.fintech.wallet.ledger.dto.RegisterRequest;
 import com.fintech.wallet.ledger.dto.RegisterResponse;
 import com.fintech.wallet.ledger.dto.UserProfileResponse;
 import com.fintech.wallet.ledger.service.AuthService;
+import com.fintech.wallet.ledger.service.OtpService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,9 +26,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
 	private final AuthService authService;
+	private final OtpService otpService;
 
-	public AuthController(AuthService authService) {
+	public AuthController(AuthService authService, OtpService otpService) {
 		this.authService = authService;
+		this.otpService = otpService;
 	}
 
 	@PostMapping("/register")
@@ -46,5 +52,15 @@ public class AuthController {
 	@GetMapping("/me")
 	public UserProfileResponse me() {
 		return authService.profile(CurrentUser.userId());
+	}
+
+	@PostMapping("/otp/request")
+	public OtpRequestResponse requestOtp() {
+		return otpService.request(CurrentUser.userId());
+	}
+
+	@PostMapping("/otp/verify")
+	public OtpVerifyResponse verifyOtp(@Valid @RequestBody OtpVerifyRequest request) {
+		return otpService.verify(CurrentUser.userId(), request);
 	}
 }

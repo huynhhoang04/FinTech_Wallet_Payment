@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST}:${POSTGRES_PORT}/${LEDGER_DB}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://${EUREKA_USER}:${EUREKA_PASSWORD}@${EUREKA_HOST}:8761/eureka
+  instance:
+    prefer-ip-address: true
+
+app:
+  security:
+    jwt-secret: ${JWT_SECRET}

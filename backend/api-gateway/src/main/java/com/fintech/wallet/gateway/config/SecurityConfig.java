@@ -5,6 +5,7 @@ import com.fintech.wallet.gateway.error.ApiErrorWriter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.config.Customizer;
@@ -33,13 +34,19 @@ public class SecurityConfig {
 				.authorizeExchange(exchange -> exchange
 						.pathMatchers(PUBLIC_PATHS).permitAll()
 						.anyExchange().authenticated())
-				.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt
-						.jwtAuthenticationConverter(reactiveConverter(authoritiesConverter))))
+				.oauth2ResourceServer(oauth2 -> oauth2
+						.authenticationEntryPoint((exchange, exception) -> {
+							exchange.getResponse().getHeaders().set(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
+							return errorWriter.write(exchange, HttpStatus.UNAUTHORIZED, ErrorCode.UNAUTHENTICATED,
+									ErrorCode.UNAUTHENTICATED.defaultMessage());
+						})
+						.jwt(jwt -> jwt.jwtAuthenticationConverter(reactiveConverter(authoritiesConverter))))
 				.exceptionHandling(handling -> handling
 						.authenticationEntryPoint((exchange, exception) -> errorWriter.write(exchange,
-								HttpStatus.UNAUTHORIZED, ErrorCode.UNAUTHENTICATED, exception.getMessage()))
+								HttpStatus.UNAUTHORIZED, ErrorCode.UNAUTHENTICATED,
+								ErrorCode.UNAUTHENTICATED.defaultMessage()))
 						.accessDeniedHandler((exchange, denied) -> errorWriter.write(exchange,
-								HttpStatus.FORBIDDEN, ErrorCode.FORBIDDEN, denied.getMessage())))
+								HttpStatus.FORBIDDEN, ErrorCode.FORBIDDEN, ErrorCode.FORBIDDEN.defaultMessage())))
 				.build();
 	}
 
