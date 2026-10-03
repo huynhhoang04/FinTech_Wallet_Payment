@@ -21,7 +21,7 @@ import reactor.core.publisher.Mono;
 @EnableWebFluxSecurity
 public class SecurityConfig {
 
-	private static final String[] PUBLIC_PATHS = { "/actuator/**", "/webhooks/**", "/api/v1/auth/**" };
+	private static final String[] PUBLIC_PATHS = { "/actuator/**", "/webhooks/**", "/api/v1/auth/**", "/error" };
 
 	@Bean
 	SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http,

@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="vi">
+<body style="font-family: sans-serif">
+<h2 th:text="${subject} ?: 'Biến động số dư'">Biến động số dư</h2>
+<table>
+	<tr th:each="entry : ${model}">
+		<td th:text="${entry.key}" style="padding-right: 12px; color: #666">key</td>
+		<td th:text="${entry.value}">value</td>
+	</tr>
+</table>
+<p style="color: #999">FinTech Wallet - thông báo tự động, vui lòng không trả lời.</p>
+</body>
+</html>

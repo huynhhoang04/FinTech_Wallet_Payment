@@ -16,7 +16,7 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableWebSecurity
 public class SecurityConfig {
 
-	private static final String[] PUBLIC_PATHS = { "/actuator/**", "/internal/**" };
+	private static final String[] PUBLIC_PATHS = { "/actuator/**", "/internal/**", "/error" };
 
 	@Bean
 	SecurityFilterChain securityFilterChain(HttpSecurity http, SecurityErrorWriter errorWriter) throws Exception {

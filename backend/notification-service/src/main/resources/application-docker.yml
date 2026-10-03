@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/${NOTIFICATION_DB:notification_db}
+    username: ${POSTGRES_USER:wallet}
+    password: ${POSTGRES_PASSWORD:wallet}
+  kafka:
+    bootstrap-servers: kafka:9092
+  mail:
+    host: mailhog
+    port: 1025
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://${EUREKA_USER:eureka}:${EUREKA_PASSWORD:eureka-local}@eureka-server:8761/eureka
