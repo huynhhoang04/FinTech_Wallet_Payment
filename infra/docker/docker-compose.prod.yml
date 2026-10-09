@@ -1,0 +1,59 @@
+# VPS overrides: run the services with the prod profile and add nginx as the single edge
+# (host network, so it reaches the services on 127.0.0.1:<port> and swap blue/green via
+# infra/nginx/conf.d/upstream.conf).
+#
+#   docker compose -f infra/docker/docker-compose.yml -f infra/docker/docker-compose.app.yml \
+#     -f infra/docker/docker-compose.prod.yml up -d
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  eureka-server:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+  api-gateway:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+  transaction-engine:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+  account-ledger-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+  payment-gateway-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+  notification-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+  audit-service:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: nginx
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../nginx/conf.d:/etc/nginx/conf.d:ro
+      # certbot on the host writes live/<domain>; only nginx publishes ports (80/443)
+      - ${CERT_DIR:-/etc/letsencrypt}/live/${PUBLIC_DOMAIN:-wallet.example.com}/fullchain.pem:/etc/nginx/certs/fullchain.pem:ro
+      - ${CERT_DIR:-/etc/letsencrypt}/live/${PUBLIC_DOMAIN:-wallet.example.com}/privkey.pem:/etc/nginx/certs/privkey.pem:ro
+    mem_limit: 64m
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null --no-check-certificate https://127.0.0.1/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6

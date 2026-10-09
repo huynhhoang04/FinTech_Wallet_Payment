@@ -1,0 +1,110 @@
+name: backend-cd
+
+on:
+  push:
+    branches: [main]
+    paths: ['backend/**']
+
+concurrency:
+  group: backend-cd-main
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21', cache: maven }
+
+      - working-directory: backend
+        run: ./mvnw -B verify
+
+  changes:
+    needs: verify
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.diff.outputs.services }}
+      services_json: ${{ steps.diff.outputs.services_json }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+
+      - id: diff
+        run: |
+          # proto/ or common/ changed -> rebuild every service (they are -am deps of all of them)
+          CHANGED=$(git diff --name-only HEAD~1 HEAD | sed 's|^backend/||' | cut -d/ -f1 | sort -u)
+          if echo "$CHANGED" | grep -qE '^(proto|common)$'; then
+            SERVICES="eureka-server api-gateway transaction-engine account-ledger-service payment-gateway-service notification-service audit-service"
+          else
+            SERVICES=$(echo "$CHANGED" | grep -E '^(eureka-server|api-gateway|transaction-engine|account-ledger-service|payment-gateway-service|notification-service|audit-service)$' | tr '\n' ' ')
+          fi
+          echo "services=$SERVICES" >> "$GITHUB_OUTPUT"
+          echo "services_json=$(echo $SERVICES | jq -R -s -c 'split(" ") | map(select(length>0))')" >> "$GITHUB_OUTPUT"
+
+  build-push:
+    needs: changes
+    if: needs.changes.outputs.services != ''
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.changes.outputs.services_json) }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21', cache: maven }
+
+      - name: Jib build + push (tag = git SHA, latest tag inherited from parent POM)
+        working-directory: backend
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # GHCR only accepts lowercase image names
+          IMAGE_PREFIX="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/fintech-wallet"
+          ./mvnw -B -pl ${{ matrix.service }} -am jib:build \
+            -Djib.to.image=${IMAGE_PREFIX}-${{ matrix.service }}:${{ github.sha }} \
+            -Djib.to.auth.username=${{ github.actor }} \
+            -Djib.to.auth.password=$GHCR_TOKEN
+
+  deploy:
+    needs: [build-push, changes]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: SSH deploy each service (blue/green, sequential)
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "$VPS_SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
+          for SVC in ${{ needs.changes.outputs.services }}; do
+            ssh -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" \
+              "/opt/fintech/infra/scripts/deploy.sh $SVC ${{ github.sha }}" \
+              || { echo "DEPLOY FAILED: $SVC - rollback ran inside deploy.sh"; exit 1; }
+          done
+
+      - name: Smoke test through nginx
+        run: |
+          curl -fsS --retry 5 --retry-delay 3 "https://${{ secrets.PUBLIC_DOMAIN }}/actuator/health" \
+            | grep -q '"status":"UP"'
+          curl -fsS "https://${{ secrets.PUBLIC_DOMAIN }}/api/v1/auth/login" -o /dev/null -w '%{http_code}' \
+            | grep -qE '400|405'
+
+      - name: Notify Telegram
+        if: always()
+        run: |
+          curl -s "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d text="backend-cd ${{ job.status }} — ${{ github.sha }} — services: ${{ needs.changes.outputs.services }}"

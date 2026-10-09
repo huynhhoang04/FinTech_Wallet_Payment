@@ -1,0 +1,152 @@
+# The 7 backend services. nginx (the edge) lives in docker-compose.prod.yml because it needs
+# TLS certs and only runs on the VPS.
+#
+# Locally, build each image into the docker daemon first:
+#   cd backend && ./mvnw -pl transaction-engine -am jib:dockerBuild \
+#     -Djib.to.image=fintech-wallet-transaction-engine:local
+#
+# On the VPS the services are not managed by this file - infra/scripts/deploy.sh places them
+# (blue/green), so image tags here are only used for local runs.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-app-common: &app-common
+  restart: unless-stopped
+  env_file: .env
+  logging: *default-logging
+
+services:
+  eureka-server:
+    <<: *app-common
+    image: fintech-wallet-eureka-server:local
+    container_name: eureka-server
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "127.0.0.1:8761:8761"
+    mem_limit: ${EUREKA_SERVER_MEM:-384m}
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8761"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+
+  api-gateway:
+    <<: *app-common
+    image: fintech-wallet-api-gateway:local
+    container_name: api-gateway
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "127.0.0.1:8080:8080"
+    mem_limit: ${API_GATEWAY_MEM:-448m}
+    depends_on:
+      redis: { condition: service_healthy }
+      eureka-server: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+
+  transaction-engine:
+    <<: *app-common
+    image: fintech-wallet-transaction-engine:local
+    container_name: transaction-engine
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "127.0.0.1:8081:8081"
+    mem_limit: ${TRANSACTION_ENGINE_MEM:-512m}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+      eureka-server: { condition: service_healthy }
+      account-ledger-service: { condition: service_started }
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8081"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+
+  account-ledger-service:
+    <<: *app-common
+    image: fintech-wallet-account-ledger-service:local
+    container_name: account-ledger-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "127.0.0.1:8082:8082"
+      - "127.0.0.1:9090:9090"
+    mem_limit: ${ACCOUNT_LEDGER_SERVICE_MEM:-512m}
+    depends_on:
+      postgres: { condition: service_healthy }
+      eureka-server: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8082"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+
+  payment-gateway-service:
+    <<: *app-common
+    image: fintech-wallet-payment-gateway-service:local
+    container_name: payment-gateway-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "127.0.0.1:8083:8083"
+    mem_limit: ${PAYMENT_GATEWAY_SERVICE_MEM:-448m}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+      eureka-server: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8083"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+
+  notification-service:
+    <<: *app-common
+    image: fintech-wallet-notification-service:local
+    container_name: notification-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "127.0.0.1:8084:8084"
+    mem_limit: ${NOTIFICATION_SERVICE_MEM:-320m}
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+      mailhog: { condition: service_healthy }
+      eureka-server: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8084"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+
+  audit-service:
+    <<: *app-common
+    image: fintech-wallet-audit-service:local
+    container_name: audit-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "127.0.0.1:8085:8085"
+    mem_limit: ${AUDIT_SERVICE_MEM:-320m}
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+      eureka-server: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8085"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
