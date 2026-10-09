@@ -15,6 +15,10 @@ jobs:
   build-verify:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      # runners are ephemeral: no reaper needed, and it saves a docker hub pull that
+      # can hit the shared-IP unauthenticated rate limit
+      TESTCONTAINERS_RYUK_DISABLED: "true"
     steps:
       - uses: actions/checkout@v4
 
