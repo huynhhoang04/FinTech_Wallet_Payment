@@ -15,6 +15,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.utility.DockerImageName;
 
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -25,9 +26,12 @@ public abstract class AbstractLedgerIT {
 
 	/** Singleton container: Spring caches one context across the test classes of this module,
 	 *  so the datasource url must keep pointing at a container that outlives a single class.
-	 *  A per-class @Container would stop the database under the cached context. */
-	static final PostgreSQLContainer<?> POSTGRES =
-			new PostgreSQLContainer<>("public.ecr.aws/docker/library/postgres:16-alpine").withReuse(true);
+	 *  A per-class @Container would stop the database under the cached context. The ECR mirror
+	 *  dodges the docker hub rate limit shared by GitHub runner IPs. */
+	private static final DockerImageName POSTGRES_IMAGE = DockerImageName
+			.parse("public.ecr.aws/docker/library/postgres:16-alpine").asCompatibleSubstituteFor("postgres");
+
+	static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>(POSTGRES_IMAGE).withReuse(true);
 
 	static {
 		POSTGRES.start();
