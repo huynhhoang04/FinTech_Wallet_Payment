@@ -16,6 +16,12 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableWebSecurity
 public class SecurityConfig {
 
+	/**
+	 * {@code /internal/**} is permitted here on purpose: {@code InternalTokenFilter} from
+	 * {@code common} runs before this chain and refuses a call without the internal token, which is
+	 * the gate docs 07 SEC-01 asks for. Requiring a user JWT instead would leave service-to-service
+	 * callers with no way in.
+	 */
 	private static final String[] PUBLIC_PATHS = {
 			"/api/v1/auth/register",
 			"/api/v1/auth/login",

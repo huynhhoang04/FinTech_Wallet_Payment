@@ -90,7 +90,12 @@ public class NotificationService {
 
 	private MimeMessage buildMessage(String recipient, String subject, Map<String, Object> model) throws Exception {
 		Context context = new Context();
-		context.setVariables(model);
+		context.setVariable("subject", subject);
+		// The template iterates a list of key/value rows; binding the map straight in rendered an empty
+		// table because there was no variable called "model" (docs 07 SEC-10).
+		context.setVariable("entries", model.entrySet().stream()
+				.map(entry -> Map.of("key", entry.getKey(), "value", String.valueOf(entry.getValue())))
+				.toList());
 		MimeMessage message = mailSender.createMimeMessage();
 		MimeMessageHelper helper = new MimeMessageHelper(message, false, "UTF-8");
 		helper.setFrom(from);

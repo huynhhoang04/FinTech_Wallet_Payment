@@ -1,9 +1,16 @@
 package com.fintech.wallet.ledger.domain;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public final class LedgerEntryFactory {
+
+	/** Jackson, not string concatenation: a reference containing a quote used to break the jsonb insert. */
+	private static final ObjectMapper MAPPER = new ObjectMapper();
 
 	private LedgerEntryFactory() {
 	}
@@ -54,8 +61,19 @@ public final class LedgerEntryFactory {
 		entry.setDirection(direction);
 		entry.setCurrency(currency);
 		entry.setBalanceAfter(balanceAfter);
-		entry.setMetadata(reference == null ? null : "{\"ref\":\"" + reference + "\"}");
+		entry.setMetadata(metadata(reference));
 		return entry;
+	}
+
+	private static String metadata(String reference) {
+		if (reference == null) {
+			return null;
+		}
+		try {
+			return MAPPER.writeValueAsString(Map.of("ref", reference));
+		} catch (JsonProcessingException e) {
+			throw new IllegalStateException("Cannot serialise entry metadata", e);
+		}
 	}
 
 	private static List<LedgerEntry> checked(List<LedgerEntry> entries) {

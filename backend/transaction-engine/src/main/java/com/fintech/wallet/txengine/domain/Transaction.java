@@ -58,6 +58,10 @@ public class Transaction extends BaseEntity {
 	@Column(name = "ledger_transaction_id")
 	private UUID ledgerTransactionId;
 
+	/** Set when the flow came from a provider checkout session, so the settled event can find it. */
+	@Column(name = "payment_intent_id")
+	private UUID paymentIntentId;
+
 	@Version
 	private long version;
 }

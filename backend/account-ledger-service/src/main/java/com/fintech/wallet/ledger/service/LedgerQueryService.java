@@ -70,6 +70,15 @@ public class LedgerQueryService {
 		return new EntriesView(transactionId, entries, entries.stream().mapToLong(LedgerEntry::getAmount).sum());
 	}
 
+	/** Used by the transaction engine to resolve which wallets a user owns before serving reads. */
+	@Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED)
+	public List<AccountInfo> accountsByOwner(UUID ownerUserId) {
+		return accountRepository.findByOwnerUserId(ownerUserId).stream()
+				.map(account -> new AccountInfo(account.getId(), account.getAccountNumber(), account.getCurrency(),
+						account.getStatus().name()))
+				.toList();
+	}
+
 	public record AccountInfo(UUID accountId, String accountNumber, String currency, String status) {
 	}
 

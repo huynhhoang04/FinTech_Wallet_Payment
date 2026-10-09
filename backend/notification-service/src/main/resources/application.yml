@@ -41,6 +41,10 @@ eureka:
     prefer-ip-address: true
 
 app:
+  internal:
+    token: ${INTERNAL_TOKEN}
+  security:
+    jwt-secret: ${JWT_SECRET}
   notification:
     from: ${MAIL_FROM:no-reply@wallet.local}
     demo-recipient: ${DEMO_RECIPIENT:demo@wallet.local}

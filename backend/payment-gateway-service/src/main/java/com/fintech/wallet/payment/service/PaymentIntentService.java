@@ -8,13 +8,16 @@ import com.fintech.wallet.payment.domain.PaymentIntent;
 import com.fintech.wallet.payment.dto.CreateIntentRequest;
 import com.fintech.wallet.payment.dto.PaymentIntentResponse;
 import com.fintech.wallet.payment.repository.PaymentIntentRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -23,6 +26,7 @@ import java.util.UUID;
  * through a webhook, and the transaction engine credits the wallet from the resulting event
  * (docs 02 section 11).
  */
+@Slf4j
 @Service
 public class PaymentIntentService {
 
@@ -57,9 +61,14 @@ public class PaymentIntentService {
 		return PaymentIntentResponse.of(intents.save(intent));
 	}
 
+	/** The caller must own the intent; answers 404 so a probe cannot tell intents apart (docs 07 SEC-04). */
 	@Transactional(readOnly = true)
-	public PaymentIntentResponse get(UUID paymentIntentId) {
-		return PaymentIntentResponse.of(require(paymentIntentId));
+	public PaymentIntentResponse getOwned(UUID paymentIntentId, UUID userId) {
+		PaymentIntent intent = require(paymentIntentId);
+		if (!userId.equals(intent.getUserId())) {
+			throw new BusinessException(ErrorCode.NOT_FOUND, "Không tìm thấy phiên nạp tiền");
+		}
+		return PaymentIntentResponse.of(intent);
 	}
 
 	@Transactional(readOnly = true)
@@ -68,6 +77,20 @@ public class PaymentIntentService {
 				PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE)));
 		return PageResponse.of(found.getContent().stream().map(PaymentIntentResponse::of).toList(),
 				found.getNumber(), found.getSize(), found.getTotalElements());
+	}
+
+	/** A checkout session that was never paid should not sit in PENDING forever (docs 07 FIN-13). */
+	@Scheduled(fixedDelayString = "${app.payment.expiry-interval-ms:60000}")
+	@Transactional
+	public void expireOverdueIntents() {
+		List<PaymentIntent> overdue = intents.findByStatusAndExpiresAtBefore(PaymentIntent.PaymentStatus.PENDING,
+				Instant.now());
+		if (overdue.isEmpty()) {
+			return;
+		}
+		overdue.forEach(intent -> intent.setStatus(PaymentIntent.PaymentStatus.EXPIRED));
+		intents.saveAll(overdue);
+		log.info("Expired {} payment intents", overdue.size());
 	}
 
 	PaymentIntent require(UUID paymentIntentId) {

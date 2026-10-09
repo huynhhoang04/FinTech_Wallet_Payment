@@ -9,6 +9,7 @@ public final class HeaderNames {
 	public static final String REQUEST_ID = "X-Request-Id";
 	public static final String IDEMPOTENT_REPLAY = "Idempotent-Replay";
 	public static final String PROVIDER_SIGNATURE = "X-Provider-Signature";
+	public static final String INTERNAL_TOKEN = "X-Internal-Token";
 
 	private HeaderNames() {
 	}

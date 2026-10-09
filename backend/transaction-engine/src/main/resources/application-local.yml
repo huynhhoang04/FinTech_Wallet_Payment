@@ -5,7 +5,13 @@ spring:
     password: ${POSTGRES_PASSWORD:wallet}
 
 app:
+  internal:
+    token: dev-internal-token
+  security:
+    jwt-secret: ZmludGVjaC13YWxsZXQtZGV2LW9ubHktand0LXNlY3JldC1rZXktMDEyMzQ1Njc4OQ==
   ledger:
     grpc-address: localhost:9090
+  payment-gateway:
+    base-url: http://localhost:8083
   outbox:
     enabled: false

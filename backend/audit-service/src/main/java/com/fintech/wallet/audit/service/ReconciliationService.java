@@ -1,7 +1,10 @@
 package com.fintech.wallet.audit.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fintech.wallet.audit.domain.ReconciliationReport;
 import com.fintech.wallet.audit.repository.ReconciliationReportRepository;
+import com.fintech.wallet.common.constant.HeaderNames;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
@@ -14,12 +17,15 @@ import org.springframework.web.client.RestClient;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Reconciles the ledger through its internal API rather than by reading its schema - services never
- * read each other's database (docs 01 section 3). A non-zero difference is the most important alert
- * in the project, so it is both logged at ERROR and exposed as a metric (docs 02 section 8.1).
+ * read each other's database (docs 01 section 3). The call carries the internal token, because
+ * {@code /internal/**} is no longer public (docs 07 SEC-01). A non-zero difference is the most
+ * important alert in the project, so it is logged at ERROR and exposed as a metric.
  */
 @Slf4j
 @Service
@@ -27,12 +33,18 @@ public class ReconciliationService {
 
 	private final ReconciliationReportRepository reports;
 	private final RestClient ledger;
+	private final ObjectMapper objectMapper;
+	private final String internalToken;
 	private final AtomicLong imbalance = new AtomicLong();
 	private final AtomicLong lastSuccessEpochSeconds = new AtomicLong();
 
 	public ReconciliationService(ReconciliationReportRepository reports, MeterRegistry meterRegistry,
-			RestClient.Builder restClientBuilder, @Value("${app.ledger.base-url}") String ledgerBaseUrl) {
+			RestClient.Builder restClientBuilder, ObjectMapper objectMapper,
+			@Value("${app.ledger.base-url}") String ledgerBaseUrl,
+			@Value("${app.internal.token}") String internalToken) {
 		this.reports = reports;
+		this.objectMapper = objectMapper;
+		this.internalToken = internalToken;
 		this.ledger = restClientBuilder.baseUrl(ledgerBaseUrl).build();
 		Gauge.builder("ledger_imbalance_total", imbalance, AtomicLong::get)
 				.description("Total of the whole ledger; must stay 0")
@@ -51,10 +63,12 @@ public class ReconciliationService {
 		try {
 			LedgerIntegrity integrity = ledger.get()
 					.uri("/internal/ledger/verify-chain")
+					.header(HeaderNames.INTERNAL_TOKEN, internalToken)
 					.retrieve()
 					.body(LedgerIntegrity.class);
 			LedgerSummary summary = ledger.get()
 					.uri("/internal/ledger/summary?date={date}", reportDate)
+					.header(HeaderNames.INTERNAL_TOKEN, internalToken)
 					.retrieve()
 					.body(LedgerSummary.class);
 
@@ -84,9 +98,19 @@ public class ReconciliationService {
 		report.setTotalCredit(summary == null ? 0L : summary.totalCredit());
 		report.setDifference(difference);
 		report.setStatus(status);
-		report.setDetails("{\"unbalancedTransactions\":" + (integrity == null ? -1 : integrity.unbalancedTransactions())
-				+ ",\"ledgerValid\":" + (integrity != null && integrity.valid()) + "}");
+		report.setDetails(details(integrity));
 		return reports.save(report);
+	}
+
+	private String details(LedgerIntegrity integrity) {
+		Map<String, Object> details = new LinkedHashMap<>();
+		details.put("unbalancedTransactions", integrity == null ? -1 : integrity.unbalancedTransactions());
+		details.put("ledgerValid", integrity != null && integrity.valid());
+		try {
+			return objectMapper.writeValueAsString(details);
+		} catch (JsonProcessingException e) {
+			throw new IllegalStateException("Cannot serialise reconciliation details", e);
+		}
 	}
 
 	public record LedgerIntegrity(boolean valid, long checkedTransactions, long unbalancedTransactions,

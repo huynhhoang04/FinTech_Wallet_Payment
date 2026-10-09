@@ -3,6 +3,7 @@ package com.fintech.wallet.notification.controller;
 import com.fintech.wallet.common.dto.PageResponse;
 import com.fintech.wallet.common.error.BusinessException;
 import com.fintech.wallet.common.error.ErrorCode;
+import com.fintech.wallet.common.security.CurrentUser;
 import com.fintech.wallet.notification.domain.DeadLetterEvent;
 import com.fintech.wallet.notification.domain.NotificationLog;
 import com.fintech.wallet.notification.repository.DeadLetterEventRepository;
@@ -21,8 +22,8 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Without a security filter chain of its own (docs 02 section 10 gives this service no Security),
- * the user id comes from the caller; the gateway is what authenticates these routes.
+ * The subject comes from the JWT, not from a query parameter (docs 07 SEC-03). The internal
+ * endpoints still name the user explicitly, and are reachable only with the internal token.
  */
 @RestController
 public class NotificationController {
@@ -41,10 +42,9 @@ public class NotificationController {
 	}
 
 	@GetMapping("/api/v1/notifications")
-	public PageResponse<NotificationView> list(@RequestParam UUID userId,
-			@RequestParam(defaultValue = "0") int page,
+	public PageResponse<NotificationView> list(@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "20") int size) {
-		Page<NotificationLog> found = logs.findByUserIdOrderByCreatedAtDesc(userId,
+		Page<NotificationLog> found = logs.findByUserIdOrderByCreatedAtDesc(UUID.fromString(CurrentUser.userId()),
 				PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE)));
 		return PageResponse.of(found.getContent().stream().map(NotificationView::of).toList(),
 				found.getNumber(), found.getSize(), found.getTotalElements());
@@ -52,7 +52,7 @@ public class NotificationController {
 
 	@GetMapping("/api/v1/notifications/{id}")
 	public NotificationView get(@PathVariable UUID id) {
-		return NotificationView.of(require(id));
+		return NotificationView.of(requireOwned(id));
 	}
 
 	@PostMapping("/internal/notifications/test")
@@ -69,9 +69,14 @@ public class NotificationController {
 		return deadLetters.findTop50ByOrderByCreatedAtDesc().stream().map(DeadLetterView::of).toList();
 	}
 
-	private NotificationLog require(UUID id) {
-		return logs.findById(id)
+	private NotificationLog requireOwned(UUID id) {
+		NotificationLog entry = logs.findById(id)
 				.orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "Không tìm thấy thông báo"));
+		String userId = CurrentUser.userId();
+		if (!entry.getUserId().toString().equals(userId)) {
+			throw new BusinessException(ErrorCode.NOT_FOUND, "Không tìm thấy thông báo");
+		}
+		return entry;
 	}
 
 	public record NotificationView(UUID id, String channel, String templateCode, String subject, String status,

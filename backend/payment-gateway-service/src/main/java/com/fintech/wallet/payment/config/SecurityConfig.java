@@ -16,7 +16,11 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableWebSecurity
 public class SecurityConfig {
 
-	/** Webhooks authenticate with the provider signature, not with a user token (docs 04 section 5.4). */
+	/**
+	 * Webhooks authenticate with the provider signature, not with a user token (docs 04 section 5.4);
+	 * {@code /internal/**} is guarded by InternalTokenFilter from common, which runs before this
+	 * chain (docs 07 SEC-01).
+	 */
 	private static final String[] PUBLIC_PATHS = { "/actuator/**", "/internal/**", "/webhooks/**", "/error" };
 
 	@Bean

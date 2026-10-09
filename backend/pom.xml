@@ -215,8 +215,12 @@
 						</from>
 						<to>
 							<image>${jib.image.prefix}/${project.artifactId}</image>
+							<tags>
+								<tag>latest</tag>
+							</tags>
 						</to>
 						<container>
+							<user>65532:65532</user>
 							<jvmFlags>
 								<flag>-XX:MaxRAMPercentage=70</flag>
 							</jvmFlags>

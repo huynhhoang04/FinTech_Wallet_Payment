@@ -13,6 +13,7 @@ import com.fintech.wallet.payment.dto.WebhookResponse;
 import com.fintech.wallet.payment.repository.PaymentIntentRepository;
 import com.fintech.wallet.payment.repository.WebhookLogRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -21,9 +22,12 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Provider webhooks (docs 04 section 5.4): verify the partner signature, refuse a repeat, record the
- * receipt, then publish. A repeat is answered 200 with {@code duplicate: true} so the partner stops
- * retrying; a business failure also answers 200 and is only logged, again to stop the retry loop.
+ * Provider webhooks (docs 04 section 5.4).
+ *
+ * <p>The signature is checked <b>before</b> anything is remembered. Consuming the dedupe slot first
+ * would let anyone post a forged callback with a real event id and suppress the genuine one that
+ * follows - the customer pays and the wallet is never credited (docs 07 SEC-02). A forged callback is
+ * therefore rejected without writing a receipt or a Redis key.
  */
 @Slf4j
 @Service
@@ -60,23 +64,28 @@ public class WebhookService {
 	public WebhookResponse receive(PaymentIntent.Provider provider, String signature, String rawBody) {
 		WebhookEvent event = read(rawBody);
 
-		if (webhooks.findByProviderAndEventId(provider, event.eventId()).isPresent()
-				|| !reserve(provider, event.eventId())) {
+		if (!HmacUtils.verify(secret(provider), rawBody, signature)) {
+			log.warn("Rejecting webhook {} from {}: signature mismatch", event.eventId(), provider);
+			throw new BusinessException(ErrorCode.INVALID_SIGNATURE, "Chữ ký đối tác không hợp lệ");
+		}
+		if (isDuplicate(provider, event.eventId())) {
 			return new WebhookResponse(true, event.eventId(), true);
 		}
 
-		boolean signatureValid = HmacUtils.verify(secret(provider), rawBody, signature);
-		WebhookLog receipt = recorder.record(provider, event, signature, signatureValid, rawBody);
-
-		if (!signatureValid) {
-			throw new BusinessException(ErrorCode.INVALID_SIGNATURE, "Chữ ký đối tác không hợp lệ");
-		}
-		if (!SUCCEEDED.equals(event.status())) {
-			log.info("Webhook {} reports status {}, nothing to credit", event.eventId(), event.status());
+		try {
+			WebhookLog receipt = recorder.record(provider, event, signature, rawBody);
+			if (!SUCCEEDED.equals(event.status())) {
+				log.info("Webhook {} reports status {}, nothing to credit", event.eventId(), event.status());
+				return new WebhookResponse(true, event.eventId(), false);
+			}
+			publisher.publish(receipt);
 			return new WebhookResponse(true, event.eventId(), false);
+		} catch (DataIntegrityViolationException e) {
+			// Two callbacks for the same event raced; the unique constraint won. Answer as a duplicate
+			// instead of a 500 so the partner stops retrying (docs 07 SEC-09).
+			log.info("Webhook {} arrived twice at once, treated as duplicate", event.eventId());
+			return new WebhookResponse(true, event.eventId(), true);
 		}
-		publisher.publish(receipt);
-		return new WebhookResponse(true, event.eventId(), false);
 	}
 
 	/**
@@ -91,9 +100,12 @@ public class WebhookService {
 		return receive(intent.getProvider(), HmacUtils.sign(secret(intent.getProvider()), rawBody), rawBody);
 	}
 
-	private boolean reserve(PaymentIntent.Provider provider, String eventId) {
+	private boolean isDuplicate(PaymentIntent.Provider provider, String eventId) {
+		if (webhooks.findByProviderAndEventId(provider, eventId).isPresent()) {
+			return true;
+		}
 		String key = DEDUPE_PREFIX + provider + ":" + eventId;
-		return Boolean.TRUE.equals(redis.opsForValue().setIfAbsent(key, "1", DEDUPE_TTL));
+		return !Boolean.TRUE.equals(redis.opsForValue().setIfAbsent(key, "1", DEDUPE_TTL));
 	}
 
 	private String secret(PaymentIntent.Provider provider) {

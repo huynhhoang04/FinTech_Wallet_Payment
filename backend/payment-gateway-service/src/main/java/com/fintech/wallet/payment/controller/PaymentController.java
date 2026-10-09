@@ -7,9 +7,7 @@ import com.fintech.wallet.common.error.ErrorCode;
 import com.fintech.wallet.common.security.CurrentUser;
 import com.fintech.wallet.payment.dto.CreateIntentRequest;
 import com.fintech.wallet.payment.dto.PaymentIntentResponse;
-import com.fintech.wallet.payment.dto.WebhookResponse;
 import com.fintech.wallet.payment.service.PaymentIntentService;
-import com.fintech.wallet.payment.service.WebhookService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,11 +25,9 @@ import java.util.UUID;
 public class PaymentController {
 
 	private final PaymentIntentService intents;
-	private final WebhookService webhooks;
 
-	public PaymentController(PaymentIntentService intents, WebhookService webhooks) {
+	public PaymentController(PaymentIntentService intents) {
 		this.intents = intents;
-		this.webhooks = webhooks;
 	}
 
 	@PostMapping("/api/v1/payments/intents")
@@ -44,19 +40,13 @@ public class PaymentController {
 
 	@GetMapping("/api/v1/payments/intents/{paymentIntentId}")
 	public PaymentIntentResponse get(@PathVariable UUID paymentIntentId) {
-		return intents.get(paymentIntentId);
+		return intents.getOwned(paymentIntentId, UUID.fromString(CurrentUser.userId()));
 	}
 
 	@GetMapping("/api/v1/payments")
 	public PageResponse<PaymentIntentResponse> list(@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "20") int size) {
 		return intents.list(UUID.fromString(CurrentUser.userId()), page, size);
-	}
-
-	/** Demo only: pretends the provider called back, so the deposit flow works without a sandbox. */
-	@PostMapping("/internal/payments/{paymentIntentId}/simulate-callback")
-	public WebhookResponse simulateCallback(@PathVariable UUID paymentIntentId) {
-		return webhooks.simulateCallback(paymentIntentId);
 	}
 
 	private static String requireIdempotencyKey(String idempotencyKey) {

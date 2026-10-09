@@ -19,6 +19,8 @@ import java.util.UUID;
 @Service
 public class AuditChainService {
 
+	private static final long CHAIN_LOCK_KEY = 7_314_159_265L;
+
 	private final AuditLogRepository logs;
 
 	public AuditChainService(AuditLogRepository logs) {
@@ -32,6 +34,9 @@ public class AuditChainService {
 		if (logs.existsByEventId(eventId)) {
 			return Optional.empty();
 		}
+		// Serialise the append: reading the previous hash and inserting must be one atomic step, or
+		// two consumers fork the chain (docs 07 SEC-08).
+		logs.lockChain(CHAIN_LOCK_KEY);
 		AuditLog previous = logs.findFirstByOrderByRecordedAtDesc();
 		String prevHash = previous == null ? null : previous.getHash();
 

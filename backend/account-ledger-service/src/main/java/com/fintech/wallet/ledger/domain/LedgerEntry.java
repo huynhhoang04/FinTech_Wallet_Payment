@@ -10,6 +10,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.Immutable;
@@ -25,10 +26,12 @@ import java.util.UUID;
 @Setter
 @Immutable
 @Entity
-@Table(name = "ledger_entries", indexes = {
-		@Index(name = "ix_le_tx", columnList = "transaction_id"),
-		@Index(name = "ix_le_account_created", columnList = "account_id, created_at")
-})
+@Table(name = "ledger_entries",
+		uniqueConstraints = @UniqueConstraint(name = "uq_le_tx_account",
+				columnNames = { "transaction_id", "account_id" }),
+		indexes = {
+				@Index(name = "ix_le_account_created", columnList = "account_id, created_at")
+		})
 @EntityListeners(AuditingEntityListener.class)
 public class LedgerEntry {
 

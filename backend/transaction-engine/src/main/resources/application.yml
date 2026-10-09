@@ -25,6 +25,11 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: transaction-engine
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
 eureka:
   client:
@@ -34,13 +39,19 @@ eureka:
     prefer-ip-address: true
 
 app:
+  internal:
+    token: ${INTERNAL_TOKEN}
   security:
-    jwt-secret: ${JWT_SECRET:ZmludGVjaC13YWxsZXQtZGV2LW9ubHktand0LXNlY3JldC1rZXktMDEyMzQ1Njc4OQ==}
+    jwt-secret: ${JWT_SECRET}
   ledger:
     grpc-address: ${LEDGER_GRPC_ADDRESS:localhost:9090}
+  payment-gateway:
+    base-url: ${PAYMENT_GATEWAY_BASE_URL:http://localhost:8083}
   lock:
     wait: 3s
     lease: 10s
+  otp:
+    threshold: ${OTP_THRESHOLD:10000000}
   fraud:
     amount-limit: 50000000
     velocity-max: 10
@@ -59,11 +70,15 @@ resilience4j:
         minimumNumberOfCalls: 5
         failureRateThreshold: 50
         waitDurationInOpenState: 10s
+        ignoreExceptions:
+          - com.fintech.wallet.common.error.BusinessException
   retry:
     instances:
       ledgerRead:
         maxAttempts: 3
         waitDuration: 200ms
+        ignoreExceptions:
+          - com.fintech.wallet.common.error.BusinessException
 
 management:
   endpoints:

@@ -13,9 +13,16 @@ public interface AccountBalanceRepository extends JpaRepository<AccountBalance, 
 
 	Optional<AccountBalance> findFirstByAccountId(UUID accountId);
 
-	@Query(value = "SELECT * FROM account_balances WHERE account_id = :accountId FOR UPDATE", nativeQuery = true)
-	Optional<AccountBalance> lockByAccountId(@Param("accountId") UUID accountId);
+	/** Locked by (account_id, currency) so a multi-currency account cannot trip the single result. */
+	@Query(value = "SELECT * FROM account_balances WHERE account_id = :accountId AND currency = :currency FOR UPDATE",
+			nativeQuery = true)
+	Optional<AccountBalance> lockByAccountIdAndCurrency(@Param("accountId") UUID accountId,
+			@Param("currency") String currency);
 
+	/**
+	 * The row lock held by the caller is what protects the balance; the entity's {@code @Version} does
+	 * not, because this native UPSERT bypasses Hibernate's optimistic check (docs 07 FIN-09).
+	 */
 	@Modifying(flushAutomatically = true, clearAutomatically = true)
 	@Query(value = """
 			INSERT INTO account_balances (id, account_id, currency, balance, version, created_at, updated_at)

@@ -1,18 +1,21 @@
 package com.fintech.wallet.txengine.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fintech.wallet.common.constant.KafkaTopics;
 import com.fintech.wallet.common.event.TransactionCompletedEvent;
+import com.fintech.wallet.txengine.domain.FraudAlert;
 import com.fintech.wallet.txengine.domain.OutboxEvent;
 import com.fintech.wallet.txengine.domain.Transaction;
 import com.fintech.wallet.txengine.domain.TransactionStatus;
+import com.fintech.wallet.txengine.repository.FraudAlertRepository;
 import com.fintech.wallet.txengine.repository.OutboxEventRepository;
 import com.fintech.wallet.txengine.repository.TransactionRepository;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -26,12 +29,14 @@ public class TransactionRecorder {
 	private static final String AGGREGATE_TYPE = "TRANSACTION";
 
 	private final TransactionRepository transactions;
+	private final FraudAlertRepository fraudAlerts;
 	private final OutboxEventRepository outbox;
 	private final ObjectMapper objectMapper;
 
-	public TransactionRecorder(TransactionRepository transactions, OutboxEventRepository outbox,
-			ObjectMapper objectMapper) {
+	public TransactionRecorder(TransactionRepository transactions, FraudAlertRepository fraudAlerts,
+			OutboxEventRepository outbox, ObjectMapper objectMapper) {
 		this.transactions = transactions;
+		this.fraudAlerts = fraudAlerts;
 		this.outbox = outbox;
 		this.objectMapper = objectMapper;
 	}
@@ -40,7 +45,7 @@ public class TransactionRecorder {
 	public Transaction complete(Transaction transaction) {
 		Transaction saved = transactions.save(transaction);
 		if (saved.getStatus() == TransactionStatus.SUCCESS) {
-			outbox.save(eventFor(saved));
+			outbox.save(transactionEvent(saved));
 		}
 		return saved;
 	}
@@ -52,9 +57,28 @@ public class TransactionRecorder {
 		return transactions.save(transaction);
 	}
 
-	private OutboxEvent eventFor(Transaction transaction) {
+	/**
+	 * Fraud alert and its {@code risk.alert} event in one transaction, and the transaction marked
+	 * FAILED, so a blocked attempt is both recorded and announced (docs 07 FIN-04).
+	 */
+	@Transactional
+	public Transaction recordFraud(Transaction transaction, FraudRuleEngine.FraudDecision decision) {
+		FraudAlert alert = new FraudAlert();
+		alert.setTransactionId(transaction.getId());
+		alert.setRuleCode(decision.ruleCode());
+		alert.setSeverity(decision.severity());
+		alert.setDecision(FraudAlert.Decision.BLOCK);
+		alert.setDetails(decision.details());
+		fraudAlerts.save(alert);
+
+		Transaction failed = fail(transaction, "FRAUD_BLOCKED:" + decision.ruleCode());
+		outbox.save(riskAlertEvent(transaction, decision));
+		return failed;
+	}
+
+	private OutboxEvent transactionEvent(Transaction transaction) {
 		TransactionCompletedEvent event = new TransactionCompletedEvent(
-				transaction.getId().toString(),
+				text(transaction.getId()),
 				transaction.getType().name(),
 				transaction.getStatus().name(),
 				text(transaction.getSourceAccountId()),
@@ -63,12 +87,27 @@ public class TransactionRecorder {
 				transaction.getCurrency(),
 				transaction.getDescription(),
 				Instant.now());
+		return outboxEvent(transaction.getId(), KafkaTopics.TX_COMPLETED, write(event));
+	}
 
+	private OutboxEvent riskAlertEvent(Transaction transaction, FraudRuleEngine.FraudDecision decision) {
+		Map<String, Object> payload = Map.of(
+				"transactionId", text(transaction.getId()),
+				"accountId", text(transaction.getSourceAccountId()),
+				"rule", decision.ruleCode(),
+				"severity", decision.severity().name(),
+				"amount", transaction.getAmount(),
+				"currency", transaction.getCurrency(),
+				"occurredAt", Instant.now().toString());
+		return outboxEvent(transaction.getId(), KafkaTopics.RISK_ALERT, write(payload));
+	}
+
+	private OutboxEvent outboxEvent(UUID aggregateId, String eventType, String payload) {
 		OutboxEvent outboxEvent = new OutboxEvent();
 		outboxEvent.setAggregateType(AGGREGATE_TYPE);
-		outboxEvent.setAggregateId(transaction.getId());
-		outboxEvent.setEventType(KafkaTopics.TX_COMPLETED);
-		outboxEvent.setPayload(write(event));
+		outboxEvent.setAggregateId(aggregateId);
+		outboxEvent.setEventType(eventType);
+		outboxEvent.setPayload(payload);
 		outboxEvent.setStatus(OutboxEvent.Status.NEW);
 		return outboxEvent;
 	}

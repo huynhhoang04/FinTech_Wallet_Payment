@@ -10,5 +10,8 @@ eureka:
       defaultZone: http://${EUREKA_USER:eureka}:${EUREKA_PASSWORD:eureka-local}@localhost:8761/eureka
 
 app:
+  internal:
+    token: dev-internal-token
   security:
     jwt-secret: ${JWT_SECRET:ZmludGVjaC13YWxsZXQtZGV2LW9ubHktand0LXNlY3JldC1rZXktMDEyMzQ1Njc4OQ==}
+    admin-phones: 0912345678

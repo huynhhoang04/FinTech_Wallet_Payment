@@ -16,6 +16,7 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableWebSecurity
 public class SecurityConfig {
 
+	/** Guarded by InternalTokenFilter from common, which runs before this chain (docs 07 SEC-01). */
 	private static final String[] PUBLIC_PATHS = { "/actuator/**", "/internal/**", "/error" };
 
 	@Bean

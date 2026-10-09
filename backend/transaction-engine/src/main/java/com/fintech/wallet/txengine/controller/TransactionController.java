@@ -4,6 +4,7 @@ import com.fintech.wallet.common.constant.HeaderNames;
 import com.fintech.wallet.common.dto.PageResponse;
 import com.fintech.wallet.common.error.BusinessException;
 import com.fintech.wallet.common.error.ErrorCode;
+import com.fintech.wallet.common.security.CurrentUser;
 import com.fintech.wallet.txengine.domain.FraudAlert;
 import com.fintech.wallet.txengine.domain.Transaction;
 import com.fintech.wallet.txengine.dto.DepositRequest;
@@ -13,6 +14,7 @@ import com.fintech.wallet.txengine.dto.WithdrawRequest;
 import com.fintech.wallet.txengine.grpc.LedgerClient;
 import com.fintech.wallet.txengine.repository.FraudAlertRepository;
 import com.fintech.wallet.txengine.repository.TransactionRepository;
+import com.fintech.wallet.txengine.service.AccountOwnership;
 import com.fintech.wallet.txengine.service.TransactionService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
@@ -26,7 +28,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -42,44 +43,46 @@ public class TransactionController {
 	private final TransactionRepository repository;
 	private final FraudAlertRepository fraudAlerts;
 	private final LedgerClient ledger;
+	private final AccountOwnership ownership;
 
 	public TransactionController(TransactionService transactions, TransactionRepository repository,
-			FraudAlertRepository fraudAlerts, LedgerClient ledger) {
+			FraudAlertRepository fraudAlerts, LedgerClient ledger, AccountOwnership ownership) {
 		this.transactions = transactions;
 		this.repository = repository;
 		this.fraudAlerts = fraudAlerts;
 		this.ledger = ledger;
+		this.ownership = ownership;
 	}
 
 	@PostMapping("/transfer")
 	public ResponseEntity<TransactionResponse> transfer(
 			@RequestHeader(value = HeaderNames.IDEMPOTENCY_KEY, required = false) String idempotencyKey,
 			@Valid @RequestBody TransferRequest request) {
-		return created(transactions.transfer(requireIdempotencyKey(idempotencyKey), request));
+		return created(transactions.transfer(requireIdempotencyKey(idempotencyKey), CurrentUser.userId(), request));
 	}
 
 	@PostMapping("/deposit")
 	public ResponseEntity<TransactionResponse> deposit(
 			@RequestHeader(value = HeaderNames.IDEMPOTENCY_KEY, required = false) String idempotencyKey,
 			@Valid @RequestBody DepositRequest request) {
-		return created(transactions.deposit(requireIdempotencyKey(idempotencyKey), request));
+		return created(transactions.deposit(requireIdempotencyKey(idempotencyKey), CurrentUser.userId(), request));
 	}
 
 	@PostMapping("/withdraw")
 	public ResponseEntity<TransactionResponse> withdraw(
 			@RequestHeader(value = HeaderNames.IDEMPOTENCY_KEY, required = false) String idempotencyKey,
 			@Valid @RequestBody WithdrawRequest request) {
-		return created(transactions.withdraw(requireIdempotencyKey(idempotencyKey), request));
+		return created(transactions.withdraw(requireIdempotencyKey(idempotencyKey), CurrentUser.userId(), request));
 	}
 
 	@GetMapping("/{transactionId}")
 	public TransactionResponse get(@PathVariable UUID transactionId) {
-		return TransactionResponse.of(requireTransaction(transactionId));
+		return TransactionResponse.of(requireVisibleTransaction(transactionId));
 	}
 
 	@GetMapping("/{transactionId}/ledger-entries")
 	public LedgerClient.LedgerEntriesInfo ledgerEntries(@PathVariable UUID transactionId) {
-		Transaction transaction = requireTransaction(transactionId);
+		Transaction transaction = requireVisibleTransaction(transactionId);
 		if (transaction.getLedgerTransactionId() == null) {
 			return new LedgerClient.LedgerEntriesInfo(transactionId, List.of(), 0L);
 		}
@@ -88,6 +91,7 @@ public class TransactionController {
 
 	@GetMapping("/{transactionId}/fraud-alerts")
 	public List<FraudAlertView> fraudAlerts(@PathVariable UUID transactionId) {
+		requireVisibleTransaction(transactionId);
 		return fraudAlerts.findByTransactionId(transactionId).stream().map(FraudAlertView::of).toList();
 	}
 
@@ -95,10 +99,24 @@ public class TransactionController {
 	public PageResponse<TransactionResponse> list(@RequestParam UUID accountId,
 			@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "20") int size) {
+		ownership.requireOwned(CurrentUser.userId(), accountId);
 		Page<Transaction> found = repository.findBySourceAccountIdOrTargetAccountId(accountId, accountId,
 				PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE)));
 		return PageResponse.of(found.getContent().stream().map(TransactionResponse::of).toList(),
 				found.getNumber(), found.getSize(), found.getTotalElements());
+	}
+
+	/** Support and audit read this without a user token, behind the internal token. */
+	@GetMapping("/internal/transactions/{transactionId}")
+	public TransactionResponse internalGet(@PathVariable UUID transactionId) {
+		return TransactionResponse.of(requireTransaction(transactionId));
+	}
+
+	private Transaction requireVisibleTransaction(UUID transactionId) {
+		Transaction transaction = requireTransaction(transactionId);
+		ownership.requireOwnsEitherSide(CurrentUser.userId(), transaction.getSourceAccountId(),
+				transaction.getTargetAccountId());
+		return transaction;
 	}
 
 	private Transaction requireTransaction(UUID transactionId) {

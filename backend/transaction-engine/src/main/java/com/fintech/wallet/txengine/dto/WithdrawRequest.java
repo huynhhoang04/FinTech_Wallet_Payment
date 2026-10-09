@@ -12,5 +12,6 @@ public record WithdrawRequest(
 		@Positive long amount,
 		@NotBlank @Size(min = 3, max = 3) String currency,
 		@NotBlank @Size(max = 16) String bankCode,
-		@NotBlank @Size(max = 32) String bankAccount) {
+		@NotBlank @Size(max = 32) String bankAccount,
+		String otpToken) {
 }

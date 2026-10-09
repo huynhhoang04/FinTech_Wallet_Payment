@@ -3,3 +3,9 @@ spring:
     url: jdbc:postgresql://localhost:5432/${NOTIFICATION_DB:notification_db}
     username: ${POSTGRES_USER:wallet}
     password: ${POSTGRES_PASSWORD:wallet}
+
+app:
+  internal:
+    token: dev-internal-token
+  security:
+    jwt-secret: ZmludGVjaC13YWxsZXQtZGV2LW9ubHktand0LXNlY3JldC1rZXktMDEyMzQ1Njc4OQ==

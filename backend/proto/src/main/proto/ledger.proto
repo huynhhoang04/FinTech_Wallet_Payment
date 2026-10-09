@@ -16,6 +16,7 @@ service LedgerService {
   rpc GetStatement (GetStatementRequest) returns (GetStatementResponse);
   rpc GetAccountByNumber (GetAccountByNumberRequest) returns (AccountSummary);
   rpc GetLedgerEntries   (GetLedgerEntriesRequest)   returns (GetLedgerEntriesResponse);
+  rpc GetAccountsByOwner (GetAccountsByOwnerRequest) returns (AccountList);
 }
 
 message PostTransferRequest {
@@ -107,4 +108,12 @@ message GetLedgerEntriesRequest {
 message GetLedgerEntriesResponse {
   repeated LedgerEntryDto entries = 1;
   int64 sum = 2;
+}
+
+message GetAccountsByOwnerRequest {
+  string owner_user_id = 1;
+}
+
+message AccountList {
+  repeated AccountSummary accounts = 1;
 }

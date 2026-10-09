@@ -1,0 +1,11 @@
+# Dev-only values. Production must supply them through the environment.
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka:eureka-local@localhost:8761/eureka
+
+app:
+  security:
+    jwt-secret: ZmludGVjaC13YWxsZXQtZGV2LW9ubHktand0LXNlY3JldC1rZXktMDEyMzQ1Njc4OQ==
+  hmac:
+    secret: dev-only-hmac-secret

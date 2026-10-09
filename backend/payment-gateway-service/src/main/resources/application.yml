@@ -34,15 +34,19 @@ eureka:
     prefer-ip-address: true
 
 app:
+  internal:
+    token: ${INTERNAL_TOKEN}
   security:
-    jwt-secret: ${JWT_SECRET:ZmludGVjaC13YWxsZXQtZGV2LW9ubHktand0LXNlY3JldC1rZXktMDEyMzQ1Njc4OQ==}
+    jwt-secret: ${JWT_SECRET}
   payment:
     publish-enabled: true
     publish-interval-ms: 10000
+    expiry-interval-ms: 60000
+    demo-endpoints: true
     provider-secrets:
-      VNPAY: ${VNPAY_SECRET:dev-vnpay-secret}
-      STRIPE: ${STRIPE_SECRET:dev-stripe-secret}
-      VIETQR: ${VIETQR_SECRET:dev-vietqr-secret}
+      VNPAY: ${VNPAY_SECRET}
+      STRIPE: ${STRIPE_SECRET}
+      VIETQR: ${VIETQR_SECRET}
   logging:
     request-flow: true
 

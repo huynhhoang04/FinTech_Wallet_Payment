@@ -8,6 +8,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.Immutable;
@@ -27,11 +28,13 @@ import java.util.UUID;
 @Setter
 @Immutable
 @Entity
-@Table(name = "audit_logs", indexes = {
-		@Index(name = "ix_audit_event", columnList = "event_id", unique = true),
-		@Index(name = "ix_audit_aggregate", columnList = "aggregate_id"),
-		@Index(name = "ix_audit_occurred", columnList = "occurred_at")
-})
+@Table(name = "audit_logs",
+		uniqueConstraints = @UniqueConstraint(name = "uq_audit_prev_hash", columnNames = "prev_hash"),
+		indexes = {
+				@Index(name = "ix_audit_event", columnList = "event_id", unique = true),
+				@Index(name = "ix_audit_aggregate", columnList = "aggregate_id"),
+				@Index(name = "ix_audit_occurred", columnList = "occurred_at")
+		})
 @EntityListeners(AuditingEntityListener.class)
 public class AuditLog {
 

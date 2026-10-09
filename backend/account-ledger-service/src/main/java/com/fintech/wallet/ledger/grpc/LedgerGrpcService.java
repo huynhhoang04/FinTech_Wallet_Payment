@@ -10,9 +10,11 @@ import com.fintech.wallet.ledger.service.LedgerPostingService;
 import com.fintech.wallet.ledger.service.LedgerQueryService;
 import com.fintech.wallet.ledger.service.StatementView;
 import com.fintech.wallet.ledger.service.TransferResult;
+import com.fintech.wallet.proto.ledger.AccountList;
 import com.fintech.wallet.proto.ledger.AccountSummary;
 import com.fintech.wallet.proto.ledger.DepositRequest;
 import com.fintech.wallet.proto.ledger.GetAccountByNumberRequest;
+import com.fintech.wallet.proto.ledger.GetAccountsByOwnerRequest;
 import com.fintech.wallet.proto.ledger.GetBalanceRequest;
 import com.fintech.wallet.proto.ledger.GetBalanceResponse;
 import com.fintech.wallet.proto.ledger.GetLedgerEntriesRequest;
@@ -169,6 +171,26 @@ public class LedgerGrpcService extends LedgerServiceGrpc.LedgerServiceImplBase {
 		} catch (IllegalArgumentException e) {
 			responseObserver.onError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()).asRuntimeException());
 		}
+	}
+
+	@Override
+	public void getAccountsByOwner(GetAccountsByOwnerRequest request, StreamObserver<AccountList> responseObserver) {
+		try {
+			AccountList.Builder response = AccountList.newBuilder();
+			queryService.accountsByOwner(toUuid(request.getOwnerUserId())).forEach(account -> response.addAccounts(toSummary(account)));
+			respond(responseObserver, response.build());
+		} catch (IllegalArgumentException e) {
+			responseObserver.onError(Status.INVALID_ARGUMENT.withDescription(e.getMessage()).asRuntimeException());
+		}
+	}
+
+	private static AccountSummary toSummary(LedgerQueryService.AccountInfo account) {
+		return AccountSummary.newBuilder()
+				.setAccountId(account.accountId().toString())
+				.setAccountNumber(account.accountNumber())
+				.setCurrency(account.currency())
+				.setStatus(account.status())
+				.build();
 	}
 
 	private static LedgerEntryDto toDto(LedgerEntry entry) {

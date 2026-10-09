@@ -24,7 +24,13 @@ import java.util.UUID;
 
 /**
  * Money write path. Accounts are always locked in ascending accountId order, all at once, before
- * any balance is read; that ordering is what keeps concurrent A->B and B->A transfers deadlock free.
+ * any balance is read; that ordering is what keeps concurrent A-&gt;B and B-&gt;A transfers deadlock free.
+ *
+ * <p>The replay check runs twice on purpose: once before locking as a cheap fast path, and again
+ * after the lock is granted. Under READ_COMMITTED a second request with the same transaction id
+ * reads "no entries yet" before it blocks, so without the second check the loser would post a
+ * duplicate set of entries (docs 07 FIN-02). The unique key on (transaction_id, account_id) is the
+ * database-level backstop.
  *
  * <p>Isolation is READ_COMMITTED, not REPEATABLE_READ. Under REPEATABLE_READ PostgreSQL raises
  * SQLState 40001 ("could not serialize access due to concurrent update") when a transaction locks a
@@ -62,6 +68,11 @@ public class LedgerPostingService {
 		}
 
 		LockedAccounts locked = lockActive(List.of(sourceAccountId, targetAccountId));
+		Optional<TransferResult> committedWhileWaiting = replayTransfer(transactionId, sourceAccountId, targetAccountId);
+		if (committedWhileWaiting.isPresent()) {
+			return committedWhileWaiting.get();
+		}
+
 		Account source = locked.accounts().get(sourceAccountId);
 		Account target = locked.accounts().get(targetAccountId);
 		requireCurrency(source, currency);
@@ -90,6 +101,10 @@ public class LedgerPostingService {
 		Account suspense = suspenseAccount();
 		requireDistinctWallet(walletAccountId, suspense);
 		LockedAccounts locked = lockActive(List.of(suspense.getId(), walletAccountId));
+		Optional<AccountPostingResult> committedWhileWaiting = replayAccountPosting(transactionId, walletAccountId);
+		if (committedWhileWaiting.isPresent()) {
+			return committedWhileWaiting.get();
+		}
 		requireCurrency(locked.accounts().get(suspense.getId()), currency);
 		requireCurrency(locked.accounts().get(walletAccountId), currency);
 
@@ -115,6 +130,10 @@ public class LedgerPostingService {
 		Account suspense = suspenseAccount();
 		requireDistinctWallet(walletAccountId, suspense);
 		LockedAccounts locked = lockActive(List.of(suspense.getId(), walletAccountId));
+		Optional<AccountPostingResult> committedWhileWaiting = replayAccountPosting(transactionId, walletAccountId);
+		if (committedWhileWaiting.isPresent()) {
+			return committedWhileWaiting.get();
+		}
 		Account wallet = locked.accounts().get(walletAccountId);
 		requireCurrency(wallet, currency);
 		requireCurrency(locked.accounts().get(suspense.getId()), currency);
@@ -142,8 +161,9 @@ public class LedgerPostingService {
 				throw new BusinessException(ErrorCode.ACCOUNT_LOCKED);
 			}
 			accounts.put(accountId, account);
-			balances.put(accountId, accountBalanceRepository.lockByAccountId(accountId)
-					.map(balance -> balance.getBalance())
+			balances.put(accountId, accountBalanceRepository
+					.lockByAccountIdAndCurrency(accountId, account.getCurrency())
+					.map(AccountBalance -> AccountBalance.getBalance())
 					.orElse(0L));
 		}
 		return new LockedAccounts(accounts, balances);

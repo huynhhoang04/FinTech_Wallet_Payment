@@ -5,5 +5,9 @@ spring:
     password: ${POSTGRES_PASSWORD:wallet}
 
 app:
+  internal:
+    token: dev-internal-token
+  security:
+    jwt-secret: ZmludGVjaC13YWxsZXQtZGV2LW9ubHktand0LXNlY3JldC1rZXktMDEyMzQ1Njc4OQ==
   ledger:
     base-url: http://localhost:8082

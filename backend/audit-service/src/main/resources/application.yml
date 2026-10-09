@@ -32,6 +32,10 @@ eureka:
     prefer-ip-address: true
 
 app:
+  internal:
+    token: ${INTERNAL_TOKEN}
+  security:
+    jwt-secret: ${JWT_SECRET}
   ledger:
     base-url: ${LEDGER_BASE_URL:http://localhost:8082}
   reconciliation:

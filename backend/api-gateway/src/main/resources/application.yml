@@ -65,15 +65,15 @@ spring:
 eureka:
   client:
     service-url:
-      defaultZone: http://${EUREKA_USER:eureka}:${EUREKA_PASSWORD:eureka-local}@${EUREKA_HOST:localhost}:8761/eureka
+      defaultZone: http://${EUREKA_USER}:${EUREKA_PASSWORD}@${EUREKA_HOST:localhost}:8761/eureka
   instance:
     prefer-ip-address: true
 
 app:
   security:
-    jwt-secret: ${JWT_SECRET:ZmludGVjaC13YWxsZXQtZGV2LW9ubHktand0LXNlY3JldC1rZXktMDEyMzQ1Njc4OQ==}
+    jwt-secret: ${JWT_SECRET}
   hmac:
-    secret: ${HMAC_SECRET:dev-only-hmac-secret}
+    secret: ${HMAC_SECRET}
     max-skew-seconds: ${HMAC_MAX_SKEW_SECONDS:300}
 
 management:

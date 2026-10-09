@@ -48,7 +48,7 @@ class AuthServiceTest {
 	private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 	private final JwtUtils jwtUtils = new JwtUtils(SECRET);
 	private final AuthService authService = new AuthService(userRepository, accountRepository, passwordEncoder,
-			jwtUtils, ACCESS_TTL, REFRESH_TTL);
+			jwtUtils, ACCESS_TTL, REFRESH_TTL, "");
 
 	@Test
 	void registerCreatesUserWithHashedPasswordAndWalletAccount() {

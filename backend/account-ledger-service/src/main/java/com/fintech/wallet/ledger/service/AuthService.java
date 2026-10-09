@@ -25,7 +25,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -36,6 +39,7 @@ public class AuthService {
 	private static final String REFRESH_TOKEN_TYPE = "refresh";
 	private static final String CURRENCY_VND = "VND";
 	private static final String ACCOUNT_NUMBER_PREFIX = "9704";
+	private static final int ACCOUNT_NUMBER_ATTEMPTS = 5;
 	private static final String INVALID_CREDENTIALS = "Sai số điện thoại hoặc mật khẩu";
 
 	private final UserRepository userRepository;
@@ -45,18 +49,29 @@ public class AuthService {
 	private final Duration accessTokenTtl;
 	private final Duration refreshTokenTtl;
 
+	/**
+	 * Admin identity is configuration, not a column: docs 03 gives the users table no role, so the
+	 * audit and reconciliation endpoints need an allowlist until one exists (docs 07 SEC-03).
+	 */
+	private final Set<String> adminPhones;
+
 	public AuthService(UserRepository userRepository,
 			AccountRepository accountRepository,
 			PasswordEncoder passwordEncoder,
 			JwtUtils jwtUtils,
 			@Value("${app.security.access-token-ttl}") Duration accessTokenTtl,
-			@Value("${app.security.refresh-token-ttl}") Duration refreshTokenTtl) {
+			@Value("${app.security.refresh-token-ttl}") Duration refreshTokenTtl,
+			@Value("${app.security.admin-phones:}") String adminPhones) {
 		this.userRepository = userRepository;
 		this.accountRepository = accountRepository;
 		this.passwordEncoder = passwordEncoder;
 		this.jwtUtils = jwtUtils;
 		this.accessTokenTtl = accessTokenTtl;
 		this.refreshTokenTtl = refreshTokenTtl;
+		this.adminPhones = Arrays.stream(adminPhones.split(","))
+				.map(String::trim)
+				.filter(phone -> !phone.isBlank())
+				.collect(Collectors.toSet());
 	}
 
 	@Transactional
@@ -117,9 +132,10 @@ public class AuthService {
 
 	private LoginResponse issueTokens(User user) {
 		String subject = user.getId().toString();
-		String accessToken = jwtUtils.generate(subject, Map.of("role", Roles.USER), accessTokenTtl);
+		String role = adminPhones.contains(user.getPhone()) ? Roles.ADMIN : Roles.USER;
+		String accessToken = jwtUtils.generate(subject, Map.of("role", role), accessTokenTtl);
 		String refreshToken = jwtUtils.generate(subject,
-				Map.of("role", Roles.USER, TOKEN_TYPE_CLAIM, REFRESH_TOKEN_TYPE), refreshTokenTtl);
+				Map.of("role", role, TOKEN_TYPE_CLAIM, REFRESH_TOKEN_TYPE), refreshTokenTtl);
 		return LoginResponse.of(accessToken, refreshToken, accessTokenTtl.toSeconds());
 	}
 
@@ -141,7 +157,14 @@ public class AuthService {
 		}
 	}
 
-	private static String nextAccountNumber() {
-		return ACCOUNT_NUMBER_PREFIX + String.format("%09d", ThreadLocalRandom.current().nextLong(1_000_000_000L));
+	private String nextAccountNumber() {
+		for (int attempt = 0; attempt < ACCOUNT_NUMBER_ATTEMPTS; attempt++) {
+			String candidate = ACCOUNT_NUMBER_PREFIX
+					+ String.format("%09d", ThreadLocalRandom.current().nextLong(1_000_000_000L));
+			if (!accountRepository.existsByAccountNumber(candidate)) {
+				return candidate;
+			}
+		}
+		throw new BusinessException(ErrorCode.VALIDATION_ERROR, "Không sinh được số tài khoản, thử lại sau");
 	}
 }
