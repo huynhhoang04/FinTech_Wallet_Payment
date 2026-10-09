@@ -1,5 +1,6 @@
 package com.fintech.wallet.ledger.support;
 
+import com.fintech.wallet.ledger.config.SystemAccountSeeder;
 import com.fintech.wallet.ledger.domain.Account;
 import com.fintech.wallet.ledger.domain.AccountBalance;
 import com.fintech.wallet.ledger.domain.AccountStatus;
@@ -9,6 +10,7 @@ import com.fintech.wallet.ledger.repository.AccountBalanceRepository;
 import com.fintech.wallet.ledger.repository.AccountRepository;
 import com.fintech.wallet.ledger.repository.LedgerEntryRepository;
 import com.fintech.wallet.ledger.service.LedgerPostingService;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
@@ -55,6 +57,20 @@ public abstract class AbstractLedgerIT {
 
 	@Autowired
 	protected AccountBalanceRepository balanceRepository;
+
+	@Autowired
+	protected SystemAccountSeeder systemAccounts;
+
+	/** One schema backs every test class and the tests assert absolute balances, so each
+	 *  test starts from an empty ledger and freshly seeded system accounts (the seeder is
+	 *  idempotent - it recreates only the missing system rows). */
+	@BeforeEach
+	void cleanLedgerState() {
+		entryRepository.deleteAll();
+		balanceRepository.deleteAll();
+		accountRepository.deleteAll();
+		systemAccounts.run(null);
+	}
 
 	protected UUID seedUserAccount(long initialBalance) {
 		Account account = new Account();
