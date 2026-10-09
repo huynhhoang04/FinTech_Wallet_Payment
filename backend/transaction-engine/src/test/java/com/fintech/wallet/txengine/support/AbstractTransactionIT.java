@@ -1,6 +1,7 @@
 package com.fintech.wallet.txengine.support;
 
 import com.fintech.wallet.txengine.grpc.LedgerClient;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
@@ -45,4 +46,13 @@ public abstract class AbstractTransactionIT {
 
 	@Autowired
 	protected com.fintech.wallet.txengine.service.TransactionService transactionService;
+
+	/** One schema and one set of static account ids back every test, and the fraud rules
+	 *  count over the whole table - so each test must start from an empty state. */
+	@BeforeEach
+	void cleanTransactionState() {
+		fraudAlerts.deleteAll();
+		outbox.deleteAll();
+		transactions.deleteAll();
+	}
 }
