@@ -15,7 +15,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
 
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -24,8 +23,14 @@ import java.util.concurrent.ThreadLocalRandom;
 @ActiveProfiles("test")
 public abstract class AbstractLedgerIT {
 
-	@Container
+	/** Singleton container: Spring caches one context across the test classes of this module,
+	 *  so the datasource url must keep pointing at a container that outlives a single class.
+	 *  A per-class @Container would stop the database under the cached context. */
 	static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine").withReuse(true);
+
+	static {
+		POSTGRES.start();
+	}
 
 	@DynamicPropertySource
 	static void datasourceProperties(DynamicPropertyRegistry registry) {

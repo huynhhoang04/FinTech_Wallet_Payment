@@ -10,17 +10,21 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
 
 @SpringBootTest
 @ActiveProfiles("test")
 public abstract class AbstractTransactionIT {
 
-	@Container
+	/** Singleton containers: Spring caches one context across the test classes of this module,
+	 *  so the datasource url must keep pointing at a container that outlives a single class.
+	 *  A per-class @Container would stop the database under the cached context. */
 	static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine").withReuse(true);
-
-	@Container
 	static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7.4-alpine").withExposedPorts(6379);
+
+	static {
+		POSTGRES.start();
+		REDIS.start();
+	}
 
 	@DynamicPropertySource
 	static void properties(DynamicPropertyRegistry registry) {
