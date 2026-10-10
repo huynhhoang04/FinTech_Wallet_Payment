@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
     paths: ['backend/**']
+  workflow_dispatch:
+    inputs:
+      services:
+        description: 'Space-separated services to deploy (empty = derive from the last commit)'
+        required: false
+        type: string
 
 concurrency:
   group: backend-cd-main
@@ -35,14 +41,21 @@ jobs:
         with: { fetch-depth: 2 }
 
       - id: diff
+        env:
+          SERVICES_OVERRIDE: ${{ inputs.services }}
         run: |
-          # proto/ or common/ changed -> rebuild every service (they are -am deps of all of them)
-          CHANGED=$(git diff --name-only HEAD~1 HEAD | sed 's|^backend/||' | cut -d/ -f1 | sort -u)
-          if echo "$CHANGED" | grep -qE '^(proto|common)$'; then
-            SERVICES="eureka-server api-gateway transaction-engine account-ledger-service payment-gateway-service notification-service audit-service"
+          if [ -n "$SERVICES_OVERRIDE" ]; then
+            SERVICES="$SERVICES_OVERRIDE"
           else
-            SERVICES=$(echo "$CHANGED" | grep -E '^(eureka-server|api-gateway|transaction-engine|account-ledger-service|payment-gateway-service|notification-service|audit-service)$' | tr '\n' ' ')
+            # proto/ or common/ changed -> rebuild every service (they are -am deps of all of them)
+            CHANGED=$(git diff --name-only HEAD~1 HEAD | sed 's|^backend/||' | cut -d/ -f1 | sort -u)
+            if echo "$CHANGED" | grep -qE '^(proto|common)$'; then
+              SERVICES="eureka-server api-gateway transaction-engine account-ledger-service payment-gateway-service notification-service audit-service"
+            else
+              SERVICES=$(echo "$CHANGED" | grep -E '^(eureka-server|api-gateway|transaction-engine|account-ledger-service|payment-gateway-service|notification-service|audit-service)$' | tr '\n' ' ')
+            fi
           fi
+          SERVICES=$(echo $SERVICES | xargs)
           echo "services=$SERVICES" >> "$GITHUB_OUTPUT"
           # printf, not echo: `jq -R -s` keeps echo's trailing newline, which would land
           # inside the last matrix value and truncate the ./mvnw command line.
