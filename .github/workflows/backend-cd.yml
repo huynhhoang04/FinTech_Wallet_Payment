@@ -44,7 +44,9 @@ jobs:
             SERVICES=$(echo "$CHANGED" | grep -E '^(eureka-server|api-gateway|transaction-engine|account-ledger-service|payment-gateway-service|notification-service|audit-service)$' | tr '\n' ' ')
           fi
           echo "services=$SERVICES" >> "$GITHUB_OUTPUT"
-          echo "services_json=$(echo $SERVICES | jq -R -s -c 'split(" ") | map(select(length>0))')" >> "$GITHUB_OUTPUT"
+          # printf, not echo: `jq -R -s` keeps echo's trailing newline, which would land
+          # inside the last matrix value and truncate the ./mvnw command line.
+          echo "services_json=$(printf '%s' "$SERVICES" | jq -R -s -c 'split(" ") | map(select(length>0))')" >> "$GITHUB_OUTPUT"
 
   build-push:
     needs: changes
