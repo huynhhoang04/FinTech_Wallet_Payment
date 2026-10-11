@@ -45,8 +45,11 @@ for i in $(seq 1 30); do
     sed -i "s|127\.0\.0\.1:${PORT}|127.0.0.1:${GREEN}|" infra/nginx/conf.d/upstream.conf
     docker exec nginx nginx -t
     docker exec nginx nginx -s reload
-    docker stop "$SERVICE" >/dev/null
-    docker rename "$SERVICE" "${SERVICE}-old-$(date +%s)"
+    # the very first deploy of a service has no blue container to stop or keep around
+    if docker container inspect "$SERVICE" >/dev/null 2>&1; then
+      docker stop "$SERVICE" >/dev/null
+      docker rename "$SERVICE" "${SERVICE}-old-$(date +%s)"
+    fi
     docker rename "${SERVICE}-green" "$SERVICE"
     echo "[deploy] OK ${SERVICE} -> ${GREEN}"
     exit 0
