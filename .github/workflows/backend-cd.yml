@@ -9,7 +9,7 @@ on:
       services:
         description: 'Space-separated services to deploy (empty = all seven)'
         required: false
-        default: 'eureka-server api-gateway transaction-engine account-ledger-service payment-gateway-service notification-service audit-service'
+        default: 'eureka-server account-ledger-service transaction-engine api-gateway payment-gateway-service notification-service audit-service'
         type: string
 
 concurrency:
@@ -46,7 +46,9 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           SERVICES_OVERRIDE: ${{ inputs.services }}
         run: |
-          ALL="eureka-server api-gateway transaction-engine account-ledger-service payment-gateway-service notification-service audit-service"
+          # dependency order: eureka first, then the ledger tx-engine calls over gRPC,
+          # then the edge and the consumers
+          ALL="eureka-server account-ledger-service transaction-engine api-gateway payment-gateway-service notification-service audit-service"
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             # manual run: an empty box means "place the whole stack", never "deploy nothing"
             SERVICES="${SERVICES_OVERRIDE:-$ALL}"
@@ -89,7 +91,10 @@ jobs:
         run: |
           # GHCR only accepts lowercase image names
           IMAGE_PREFIX="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/fintech-wallet"
-          ./mvnw -B -pl ${{ matrix.service }} -am jib:build \
+          # `package` must precede `jib:build`: a bare jib:build runs no lifecycle, so on a
+          # clean checkout there is no target/classes and jib fails with "Obtaining project
+          # build output files failed". Tests already ran in the verify job.
+          ./mvnw -B -pl ${{ matrix.service }} -am -DskipTests package jib:build \
             -Djib.to.image=${IMAGE_PREFIX}-${{ matrix.service }}:${{ github.sha }} \
             -Djib.to.auth.username=${{ github.actor }} \
             -Djib.to.auth.password=$GHCR_TOKEN
