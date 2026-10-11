@@ -46,7 +46,7 @@ app:
   ledger:
     grpc-address: ${LEDGER_GRPC_ADDRESS:localhost:9090}
   payment-gateway:
-    base-url: ${PAYMENT_GATEWAY_BASE_URL:http://localhost:8083}
+    base-url: ${PAYMENT_GATEWAY_BASE_URL:http://payment-gateway-service}
   lock:
     wait: 3s
     lease: 10s

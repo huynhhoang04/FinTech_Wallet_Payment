@@ -3,6 +3,7 @@ package com.fintech.wallet.txengine.service;
 import com.fintech.wallet.common.constant.HeaderNames;
 import com.fintech.wallet.common.error.BusinessException;
 import com.fintech.wallet.common.error.ErrorCode;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -14,7 +15,8 @@ import java.util.UUID;
 /**
  * Asks the payment gateway for a checkout session through its internal API. The call carries the
  * internal token rather than the caller's JWT, because this is a service-to-service call (docs 04
- * section 0.1).
+ * section 0.1). The builder is load-balanced: the base URL is a Eureka service id, so the call
+ * follows the instance across blue/green port swaps.
  */
 @Component
 public class PaymentGatewayClient {
@@ -22,7 +24,8 @@ public class PaymentGatewayClient {
 	private final RestClient client;
 	private final String internalToken;
 
-	public PaymentGatewayClient(RestClient.Builder builder,
+	public PaymentGatewayClient(
+			@Qualifier("paymentGatewayRestClientBuilder") RestClient.Builder builder,
 			@Value("${app.payment-gateway.base-url}") String baseUrl,
 			@Value("${app.internal.token}") String internalToken) {
 		this.client = builder.baseUrl(baseUrl).build();
