@@ -7,8 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       services:
-        description: 'Space-separated services to deploy (empty = derive from the last commit)'
+        description: 'Space-separated services to deploy (empty = all seven)'
         required: false
+        default: 'eureka-server api-gateway transaction-engine account-ledger-service payment-gateway-service notification-service audit-service'
         type: string
 
 concurrency:
@@ -42,15 +43,18 @@ jobs:
 
       - id: diff
         env:
+          EVENT_NAME: ${{ github.event_name }}
           SERVICES_OVERRIDE: ${{ inputs.services }}
         run: |
-          if [ -n "$SERVICES_OVERRIDE" ]; then
-            SERVICES="$SERVICES_OVERRIDE"
+          ALL="eureka-server api-gateway transaction-engine account-ledger-service payment-gateway-service notification-service audit-service"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            # manual run: an empty box means "place the whole stack", never "deploy nothing"
+            SERVICES="${SERVICES_OVERRIDE:-$ALL}"
           else
             # proto/ or common/ changed -> rebuild every service (they are -am deps of all of them)
             CHANGED=$(git diff --name-only HEAD~1 HEAD | sed 's|^backend/||' | cut -d/ -f1 | sort -u)
             if echo "$CHANGED" | grep -qE '^(proto|common)$'; then
-              SERVICES="eureka-server api-gateway transaction-engine account-ledger-service payment-gateway-service notification-service audit-service"
+              SERVICES="$ALL"
             else
               SERVICES=$(echo "$CHANGED" | grep -E '^(eureka-server|api-gateway|transaction-engine|account-ledger-service|payment-gateway-service|notification-service|audit-service)$' | tr '\n' ' ')
             fi
