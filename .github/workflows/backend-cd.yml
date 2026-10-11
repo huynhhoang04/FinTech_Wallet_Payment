@@ -101,23 +101,17 @@ jobs:
 
   deploy:
     needs: [build-push, changes]
-    runs-on: ubuntu-latest
+    # Runs on the VPS itself. The provider drops inbound 22/80/443 from everywhere outside
+    # Vietnam, so a GitHub-hosted runner can never dial in; the runner dials out to GitHub
+    # instead, which is the only direction this network allows. Do NOT give this job a
+    # pull_request trigger: a self-hosted runner must never execute code from a fork.
+    runs-on: [self-hosted, vps]
     environment: production
     steps:
-      - uses: actions/checkout@v4
-
-      - name: SSH deploy each service (blue/green, sequential)
-        env:
-          VPS_HOST: ${{ secrets.VPS_HOST }}
-          VPS_USER: ${{ secrets.VPS_USER }}
-          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+      - name: Deploy each service (blue/green, sequential)
         run: |
-          mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          echo "$VPS_SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts
           for SVC in ${{ needs.changes.outputs.services }}; do
-            ssh -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" \
-              "/opt/fintech/infra/scripts/deploy.sh $SVC ${{ github.sha }}" \
+            /opt/fintech/infra/scripts/deploy.sh "$SVC" "${{ github.sha }}" \
               || { echo "DEPLOY FAILED: $SVC - rollback ran inside deploy.sh"; exit 1; }
           done
 
