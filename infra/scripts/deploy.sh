@@ -16,6 +16,16 @@ declare -A PORTS=( [api-gateway]=8080 [transaction-engine]=8081 [account-ledger-
   [payment-gateway-service]=8083 [notification-service]=8084 [audit-service]=8085 [eureka-server]=8761 )
 PORT="${PORTS[$SERVICE]:?unknown service}"; GREEN=$((PORT + 1000))
 
+# Every other service is discovered through Eureka, and Eureka hands out the port it saw
+# the instance register on - so moving a service's port is safe. eureka-server is the one
+# exception: clients address it by a fixed URL (EUREKA_HOST:8761), never through discovery,
+# so its listening port must stay put. Only the host port we publish it on moves.
+if [ "$SERVICE" = "eureka-server" ]; then
+  RUN_ARGS=( -e SPRING_PROFILES_ACTIVE=prod -p "127.0.0.1:${GREEN}:${PORT}" )
+else
+  RUN_ARGS=( -e SPRING_PROFILES_ACTIVE=prod -e SERVER_PORT="$GREEN" -p "127.0.0.1:${GREEN}:${GREEN}" )
+fi
+
 cd "$BASE"
 
 # GHCR image names must be lowercase - derive the owner from the clone's origin URL
@@ -34,9 +44,9 @@ docker pull "$IMAGE"                                      # needs `docker login 
 docker rm -f "${SERVICE}-green" >/dev/null 2>&1 || true
 echo "[deploy] start green ${SERVICE}@${GREEN}"
 docker run -d --name "${SERVICE}-green" --network fintech-net --restart unless-stopped \
-  --env-file infra/docker/.env -e SPRING_PROFILES_ACTIVE=prod -e SERVER_PORT="$GREEN" \
+  --env-file infra/docker/.env "${RUN_ARGS[@]}" \
   --memory "$MEM" \
-  -p "127.0.0.1:${GREEN}:${GREEN}" "$IMAGE" >/dev/null
+  "$IMAGE" >/dev/null
 
 for i in $(seq 1 30); do
   sleep 3
