@@ -4,6 +4,7 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.io.DecodingException;
 import io.jsonwebtoken.security.Keys;
 
 import javax.crypto.SecretKey;
@@ -21,7 +22,16 @@ public class JwtUtils {
 	}
 
 	public static SecretKey secretKey(String base64Secret) {
-		return Keys.hmacShaKeyFor(Decoders.BASE64.decode(base64Secret));
+		byte[] key;
+		try {
+			key = Decoders.BASE64.decode(base64Secret);
+		} catch (DecodingException e) {
+			throw new IllegalStateException(
+					"app.security.jwt-secret must be standard base64 (A-Za-z0-9+/); a base64url value "
+							+ "(containing '-' or '_') does not decode. Generate one with: openssl rand -base64 48",
+					e);
+		}
+		return Keys.hmacShaKeyFor(key);
 	}
 
 	public String generate(String subject, Map<String, Object> claims, Duration ttl) {
