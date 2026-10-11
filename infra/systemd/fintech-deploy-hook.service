@@ -1,0 +1,19 @@
+[Unit]
+Description=Fintech Wallet deploy hook (CD trigger over the Cloudflare tunnel)
+Documentation=https://github.com/huynhhoang04/FinTech_Wallet_Payment/blob/main/docs/09-cicd-pipeline.md
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=deploy
+# deploy.sh runs `git fetch` against GitHub, which resolves the deploy key through
+# ~/.ssh/config - so HOME has to be the deploy user's, systemd does not set it.
+Environment=HOME=/home/deploy
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/usr/bin/python3 /opt/fintech/infra/scripts/deploy-hook.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

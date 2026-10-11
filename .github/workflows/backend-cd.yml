@@ -101,18 +101,34 @@ jobs:
 
   deploy:
     needs: [build-push, changes]
-    # Runs on the VPS itself. The provider drops inbound 22/80/443 from everywhere outside
-    # Vietnam, so a GitHub-hosted runner can never dial in; the runner dials out to GitHub
-    # instead, which is the only direction this network allows. Do NOT give this job a
-    # pull_request trigger: a self-hosted runner must never execute code from a fork.
-    runs-on: [self-hosted, vps]
+    runs-on: ubuntu-latest
     environment: production
     steps:
-      - name: Deploy each service (blue/green, sequential)
+      # The VPS answers on no port at all from outside Vietnam, and Microsoft's anycast range
+      # is blocked too, so neither SSH nor a self-hosted runner can reach it. The only usable
+      # path in is the Cloudflare tunnel, so the deploy is triggered over HTTPS and
+      # infra/scripts/deploy-hook.py runs deploy.sh on the far side.
+      - name: Deploy each service through the deploy hook
+        env:
+          HOOK_URL: https://${{ secrets.PUBLIC_DOMAIN }}/deploy-hook
+          HOOK_TOKEN: ${{ secrets.DEPLOY_HOOK_TOKEN }}
         run: |
+          set -euo pipefail
+          # One deploy can outlive Cloudflare's 100s origin timeout, so start a job and poll.
           for SVC in ${{ needs.changes.outputs.services }}; do
-            /opt/fintech/infra/scripts/deploy.sh "$SVC" "${{ github.sha }}" \
-              || { echo "DEPLOY FAILED: $SVC - rollback ran inside deploy.sh"; exit 1; }
+            echo "=== $SVC ==="
+            ID=$(curl -fsS -X POST "$HOOK_URL/deploy" \
+                   -H "Authorization: Bearer $HOOK_TOKEN" \
+                   -H 'Content-Type: application/json' \
+                   -d "{\"service\":\"$SVC\",\"sha\":\"${{ github.sha }}\"}" | jq -r .id)
+            for _ in $(seq 1 180); do
+              BODY=$(curl -fsS "$HOOK_URL/status/$ID")
+              STATE=$(jq -r .state <<<"$BODY")
+              [ "$STATE" = "running" ] || break
+              sleep 5
+            done
+            jq -r .log <<<"$BODY"
+            [ "$STATE" = "done" ] || { echo "DEPLOY FAILED: $SVC"; exit 1; }
           done
 
       - name: Smoke test through nginx
