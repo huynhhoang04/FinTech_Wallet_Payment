@@ -805,3 +805,10 @@ docker restart api-gateway        # chỉ gateway đọc biến này
   `promtail-config.yml`, run `38268840304`). `upstream.conf`/`prometheus.yml` không dính vì chúng không đổi
   giữa 2 commit — deploy nào cũng ghi lại. Cách chữa: `cd /opt/fintech && git checkout -- <file>` rồi deploy
   lại; cách phòng: **commit + push** thay vì sửa trực tiếp trên VPS.
+- **Prometheus không "thấy" cấu hình mới dù đã SIGHUP**: config được bind-mount dạng **2 file rời**, mà
+  `git checkout` trong `deploy.sh` **thay file (inode mới)** trong khi container đang chạy vẫn giữ **inode cũ**
+  ⇒ bản viết lại của `sync-prometheus-targets.sh` không bao giờ tới được Prometheus: sau deploy nó vẫn scrape
+  `audit-service:13085` trong khi host ghi `14085` (đo được: host inode `560633` vs container inode `532485`).
+  Đã đổi sang **mount thư mục** `../monitoring/prometheus:/etc/prometheus-cfg:ro` và cho `--config.file` +
+  `rule_files` trỏ vào đó. Chỉ Prometheus cần cách này vì nó hot-reload; alertmanager/loki/promtail đọc config
+  một lần lúc start nên restart là đủ.
