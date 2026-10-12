@@ -12,7 +12,5 @@ eureka:
       defaultZone: http://${EUREKA_USER}:${EUREKA_PASSWORD}@${EUREKA_HOST}:8761/eureka
 
 app:
-  ledger:
-    base-url: ${LEDGER_BASE_URL}
   logging:
     request-flow: false

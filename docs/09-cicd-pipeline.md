@@ -780,3 +780,12 @@ docker restart api-gateway        # chỉ gateway đọc biến này
   code đang chạy. Nên bản `deploy.sh` mới chỉ được dùng từ lần deploy **kế tiếp**; muốn thấy thay đổi
   trong `deploy.sh` phải deploy 2 lần (hoặc chạy tay phần mới một lần để đồng bộ trạng thái, như đã làm
   với `sync-prometheus-targets.sh`).
+- **Reconciliation luôn `FAILED`**: audit-service gọi ledger bằng `LEDGER_BASE_URL=http://account-ledger-service:8082`
+  (port base hardcode) qua một `RestClient.Builder` thường, nên sau khi blue/green dời ledger sang `+1000`
+  thì **mọi** `POST /api/v1/reconciliation/run` ghi report `FAILED` kèm log
+  `I/O error ... Connect to http://account-ledger-service:8082 failed` — và
+  `reconciliation_last_success_timestamp_seconds` không bao giờ nhảy. notification-service đã có sẵn cách
+  đúng (`LedgerWebConfig` với `@LoadBalanced RestClient.Builder` + eureka service id) nhưng audit-service bị
+  bỏ sót. Đã mirror lại: thêm `spring-cloud-starter-loadbalancer`, `audit/config/LedgerWebConfig`, bỏ port
+  hardcode ở cả `application-{local,docker,prod}.yml` và trong `.env` (`LEDGER_BASE_URL` giờ là service id
+  không kèm port).

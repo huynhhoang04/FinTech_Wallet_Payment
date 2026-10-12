@@ -10,7 +10,3 @@ eureka:
   client:
     service-url:
       defaultZone: http://${EUREKA_USER:eureka}:${EUREKA_PASSWORD:eureka-local}@eureka-server:8761/eureka
-
-app:
-  ledger:
-    base-url: http://account-ledger-service:8082

@@ -37,7 +37,8 @@ app:
   security:
     jwt-secret: ${JWT_SECRET}
   ledger:
-    base-url: ${LEDGER_BASE_URL:http://localhost:8082}
+    # service id, not host:port: blue/green moves the ledger's port and Eureka supplies the live one
+    base-url: ${LEDGER_BASE_URL:http://account-ledger-service}
   reconciliation:
     cron: ${RECONCILIATION_CRON:0 5 0 * * *}
   logging:

@@ -8,6 +8,7 @@ import com.fintech.wallet.common.constant.HeaderNames;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -39,7 +40,7 @@ public class ReconciliationService {
 	private final AtomicLong lastSuccessEpochSeconds = new AtomicLong();
 
 	public ReconciliationService(ReconciliationReportRepository reports, MeterRegistry meterRegistry,
-			RestClient.Builder restClientBuilder, ObjectMapper objectMapper,
+			@Qualifier("ledgerRestClientBuilder") RestClient.Builder restClientBuilder, ObjectMapper objectMapper,
 			@Value("${app.ledger.base-url}") String ledgerBaseUrl,
 			@Value("${app.internal.token}") String internalToken) {
 		this.reports = reports;
