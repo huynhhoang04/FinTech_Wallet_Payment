@@ -789,3 +789,19 @@ docker restart api-gateway        # chỉ gateway đọc biến này
   bỏ sót. Đã mirror lại: thêm `spring-cloud-starter-loadbalancer`, `audit/config/LedgerWebConfig`, bỏ port
   hardcode ở cả `application-{local,docker,prod}.yml` và trong `.env` (`LEDGER_BASE_URL` giờ là service id
   không kèm port).
+- **Alert `LedgerImbalance` và panel dashboard là alert/panel CHẾT**: Micrometer **bỏ hậu tố `_total`** khi
+  export, nên gauge khai báo là `ledger_imbalance_total` thực tế được scrape với tên `ledger_imbalance`;
+  `alert-rules.yml` và `overview.json` lại query `ledger_imbalance_total` (không tồn tại) ⇒ cảnh báo quan trọng
+  nhất của dự án không bao giờ bắn và panel "Ledger imbalance" hiện `No data`. Đã đổi cả 4 nơi (gauge trong
+  `ReconciliationService`, `alert-rules.yml`, `overview.json`, docs + devops skill) về `ledger_imbalance`.
+- **Panel log của dashboard rỗng**: promtail gán label `container` theo **tên docker nó thấy lần đầu**, mà
+  blue/green chạy container mới tên `<service>-green` rồi mới rename ⇒ mọi stream có label kiểu
+  `transaction-engine-green`, không khớp query `{container="transaction-engine"}`. Đã thêm `relabel_configs`
+  bỏ hậu tố `-green` / `-old-<ts>` và nới regex panel log để dữ liệu cũ vẫn hiện.
+- **Sửa tay một file tracked trên VPS sẽ CHẶN lần deploy kế tiếp**: `deploy.sh` chạy `git checkout <sha>`; nếu
+  file đó **cũng đổi trong commit sắp checkout**, git từ chối:
+  `error: Your local changes to the following files would be overwritten by checkout … Aborting` ⇒ job `deploy`
+  báo FAILED dù `build-push` đã xong (đã xảy ra thật khi sửa tay `alert-rules.yml`/`overview.json`/
+  `promtail-config.yml`, run `38268840304`). `upstream.conf`/`prometheus.yml` không dính vì chúng không đổi
+  giữa 2 commit — deploy nào cũng ghi lại. Cách chữa: `cd /opt/fintech && git checkout -- <file>` rồi deploy
+  lại; cách phòng: **commit + push** thay vì sửa trực tiếp trên VPS.

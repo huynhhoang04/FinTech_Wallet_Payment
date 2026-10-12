@@ -97,11 +97,13 @@ services:
     container_name: prometheus
     restart: unless-stopped
     command:
-      - --config.file=/etc/prometheus/prometheus.yml
+      - --config.file=/etc/prometheus-cfg/prometheus.yml
       - --storage.tsdb.retention.time=7d
     volumes:
-      - ../monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ../monitoring/prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      # Mount the DIRECTORY, not the two files: deploy.sh runs `git checkout`, which replaces a file
+      # (new inode), and the container would keep reading the old one through a single-file mount - the
+      # rewrite done by sync-prometheus-targets.sh would then never be seen, even after a SIGHUP.
+      - ../monitoring/prometheus:/etc/prometheus-cfg:ro
       - prom-data:/prometheus
     mem_limit: ${PROMETHEUS_MEM:-384m}
     logging: *default-logging

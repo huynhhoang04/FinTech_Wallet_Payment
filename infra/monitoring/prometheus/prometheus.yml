@@ -2,7 +2,7 @@ global:
   scrape_interval: 15s
 
 rule_files:
-  - /etc/prometheus/alert-rules.yml
+  - /etc/prometheus-cfg/alert-rules.yml
 
 scrape_configs:
   - job_name: backend
