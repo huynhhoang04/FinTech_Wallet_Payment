@@ -812,3 +812,13 @@ docker restart api-gateway        # chỉ gateway đọc biến này
   Đã đổi sang **mount thư mục** `../monitoring/prometheus:/etc/prometheus-cfg:ro` và cho `--config.file` +
   `rule_files` trỏ vào đó. Chỉ Prometheus cần cách này vì nó hot-reload; alertmanager/loki/promtail đọc config
   một lần lúc start nên restart là đủ.
+- **`ServiceDown` báo động giả sau MỖI lần deploy**: `instance` là `service:port`, blue/green đổi port nên
+  vài phút sau deploy series cũ (`audit-service:13085`) còn `up=0` trong khi series mới (`…:14085`) đã lên ⇒
+  alert bắn. Đã đổi biểu thức sang `max by (service) (label_replace(up{job="backend"}, "service", "$1",
+  "instance", "([^:]+):.*")) == 0`. **Lưu ý kỹ thuật:** `metric_relabel_configs` **không** áp cho metric `up`
+  (Prometheus tự sinh nó **sau** bước relabel) — nên phải strip port bằng `label_replace` **trong rule**;
+  block `metric_relabel_configs` vẫn giữ để mọi metric khác có label `service` cho dashboard.
+- **`ReconciliationStale` bắn sau khi restart `audit-service`**: gauge `reconciliation_last_success_timestamp_seconds`
+  nằm trong RAM, khởi động lại thì về `0` ⇒ `time() - 0 > 90000` đúng ⇒ alert `pending` rồi `firing` cho tới khi
+  có lần đối chiếu thành công (cron 00:05 UTC, hoặc gọi tay `POST /api/v1/reconciliation/run`). Đây là hành vi
+  **đã biết**; trong demo thì chạy bước reconcile một lần là alert tự hết (đã kiểm chứng: 5/5 rule `inactive`).

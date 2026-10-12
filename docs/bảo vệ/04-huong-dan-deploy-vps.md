@@ -209,6 +209,11 @@ DRY_RUN=1 infra/scripts/bruno-tunnel.sh     # chỉ in ra các forward, không m
 | **Alertmanager** | http://127.0.0.1:9093 | (không auth) | Trạng thái alert + đường gửi Telegram |
 
 > ⚠️ Prometheus dùng **local port 9091** (không phải 9090) vì 9090 đã dành cho gRPC của ledger.
+> ⚠️ **Phải chạy lại tunnel sau khi recreate một container monitoring** (ví dụ đổi config Prometheus rồi
+> `docker compose up -d prometheus`): container được tạo lại ⇒ **IP container đổi** (đã gặp: prometheus
+> `172.18.0.15` → `172.18.0.3`) ⇒ forward cũ chết. Script resolve IP lúc chạy nên chỉ cần `Ctrl+C` rồi chạy lại.
+> ⚠️ **Sau khi deploy/restart `audit-service`, alert `ReconciliationStale` sẽ `pending`** vì gauge reset về 0
+> khi khởi động lại. Chạy một lần `37 - Reconciliation - Run` là alert tự về `inactive` (đúng luồng demo ở Bước F).
 
 ### Truy vấn mẫu để chiếu (Grafana → Explore → chọn datasource Loki)
 
@@ -242,13 +247,14 @@ docker start transaction-engine
 > Telegram **đã có** `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` trong `.env` và Alertmanager đã substitute đúng.
 > Vẫn nên **thử trước** 1 lần vì đây là bước dễ trượt nhất nếu bot bị chặn.
 
-### Ba lỗi monitoring đã phát hiện và sửa (nên kể: "vì sao lại làm vậy")
+### Bốn lỗi monitoring đã phát hiện và sửa (nên kể: "vì sao lại làm vậy")
 
 | Lỗi | Triệu chứng thật | Nguyên nhân | Cách chữa |
 |---|---|---|---|
 | Tên metric sai | Alert `LedgerImbalance` **không bao giờ bắn**; panel "Ledger imbalance" của dashboard **No data** | Code đặt tên gauge `ledger_imbalance_total`, nhưng Micrometer **bỏ hậu tố `_total`** khi export (hậu tố đó thuộc về counter) ⇒ tên thật là `ledger_imbalance`, còn alert/dashboard lại query `ledger_imbalance_total` | Đổi cả 4 nơi về `ledger_imbalance`: code gauge, `alert-rules.yml`, `overview.json`, docs/skills |
 | Label log dính hậu tố slot | Panel log của dashboard **rỗng**; `{container="transaction-engine"}` **không ra gì** | Blue/green chạy container mới tên `<service>-green` rồi mới rename, và promtail giữ tên nó thấy **lần đầu** ⇒ label là `transaction-engine-green`, không khớp query | Thêm `relabel_configs` bỏ hậu tố `-green` / `-old-<ts>` trong `promtail-config.yml`; nới regex panel log để đọc được cả dữ liệu cũ |
 | Prometheus scrape cổng **cũ** sau deploy | `up=0` cho 1 service: nó scrape `audit-service:13085` trong khi service đã ở `14085` | Config bind-mount dạng **2 file rời**; `git checkout` trong `deploy.sh` **thay file (inode mới)** còn container giữ **inode cũ** ⇒ ghi tại chỗ + SIGHUP vẫn đọc bản cũ (đo được: host inode `560633` vs container `532485`) | Đổi sang **mount thư mục** `../monitoring/prometheus:/etc/prometheus-cfg:ro`, `--config.file` + `rule_files` trỏ vào đó (chỉ Prometheus cần, vì các service monitoring khác đọc config 1 lần lúc start) |
+| Alert `ServiceDown` **báo động giả sau mỗi deploy** | Cứ deploy xong là có alert critical `ServiceDown` cho `audit-service:13085` (port cũ) | `instance` là `service:port`; blue/green đổi port ⇒ series cũ `up=0` tồn tại vài phút trong khi series mới đã `up=1`. **Bẫy kỹ thuật:** `metric_relabel_configs` **không** áp cho metric `up` (Prometheus sinh `up` sau bước relabel) nên không thể gắn label `service` từ đó | Strip port **trong rule** bằng `label_replace`: `max by (service) (label_replace(up{job="backend"}, "service", "$1", "instance", "([^:]+):.*")) == 0` |
 
 ---
 
