@@ -19,6 +19,16 @@ spring:
               # after an idle gap dies with PrematureCloseException -> 500.
               max-idle-time: 10s
               eviction-interval: 5s
+          # Belt and braces for the same failure: a GET that hits a doomed connection is retried
+          # instead of surfacing a 500. Reads are idempotent; POSTs are excluded on purpose
+          # (posting calls must never be retried - docs 04 section 4.1).
+          default-filters:
+            - name: Retry
+              args:
+                retries: 2
+                methods: GET
+                series: SERVER_ERROR
+                exceptions: java.io.IOException,reactor.netty.http.client.PrematureCloseException,reactor.core.Exceptions$ReactiveException
           discovery:
             locator:
               enabled: false
