@@ -7,6 +7,14 @@ rule_files:
 scrape_configs:
   - job_name: backend
     metrics_path: /actuator/prometheus
+    metric_relabel_configs:
+      # `instance` is "service:port" and blue/green changes the port on every deploy, so an up==0 alert
+      # per instance fires a false ServiceDown right after each deploy (the old port's series goes
+      # stale while the new port's series appears). Keep a port-free `service` label for alerting.
+      - source_labels: [instance]
+        regex: '([^:]+):\d+'
+        target_label: service
+        replacement: '$1'
     static_configs:
       - targets:
           - api-gateway:8080

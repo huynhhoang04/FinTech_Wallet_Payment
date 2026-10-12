@@ -18,12 +18,14 @@ groups:
         annotations:
           summary: "Transaction error rate above 2% for 5m"
       - alert: ServiceDown
-        expr: up{job="backend"} == 0
+        # max by (service), not per instance: blue/green moves the port, so an instance-level check would
+        # fire on every deploy (the old service:port series goes stale while the new one comes up).
+        expr: max by (service) (up{job="backend"}) == 0
         for: 1m
         labels:
           severity: critical
         annotations:
-          summary: "{{ $labels.instance }} has been down for 1m"
+          summary: "{{ $labels.service }} has been down for 1m"
       - alert: VpsResourcePressure
         expr: |
           (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 15
