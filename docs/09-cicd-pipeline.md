@@ -775,3 +775,8 @@ docker restart api-gateway        # chỉ gateway đọc biến này
   sang diff cả push (`github.event.before`..`github.sha`, `fetch-depth: 0`, fallback `HEAD~1` khi
   before rỗng/không tồn tại) và thêm `.github/workflows/**` vào `paths` để sửa pipeline cũng chạy lại
   chính pipeline đó.
+- **Sửa `deploy.sh` không có tác dụng ngay trong lần deploy đó**: tiến trình đang chạy là bản đọc từ đĩa
+  lúc hook gọi nó, mà `git checkout "$SHA"` nằm giữa thân script — nó thay file trên đĩa chứ không đổi
+  code đang chạy. Nên bản `deploy.sh` mới chỉ được dùng từ lần deploy **kế tiếp**; muốn thấy thay đổi
+  trong `deploy.sh` phải deploy 2 lần (hoặc chạy tay phần mới một lần để đồng bộ trạng thái, như đã làm
+  với `sync-prometheus-targets.sh`).
