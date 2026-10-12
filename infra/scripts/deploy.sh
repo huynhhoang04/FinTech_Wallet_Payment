@@ -81,6 +81,9 @@ for i in $(seq 1 30); do
     fi
     docker exec nginx nginx -t
     docker exec nginx nginx -s reload
+    # monitoring is not the money path: never fail a deploy because Prometheus could not be synced
+    bash "$BASE/infra/scripts/sync-prometheus-targets.sh" \
+      || echo "[deploy] warning: prometheus targets not synced" >&2
     # the very first deploy of a service has no blue container to stop or keep around
     if docker container inspect "$SERVICE" >/dev/null 2>&1; then
       docker stop "$SERVICE" >/dev/null

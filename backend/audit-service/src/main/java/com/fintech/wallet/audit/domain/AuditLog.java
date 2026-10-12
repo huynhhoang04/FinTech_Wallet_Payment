@@ -12,8 +12,6 @@ import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.Immutable;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
@@ -54,8 +52,12 @@ public class AuditLog {
 	@Column(length = 64)
 	private String actor;
 
-	@JdbcTypeCode(SqlTypes.JSON)
-	@Column(nullable = false, columnDefinition = "jsonb")
+	/**
+	 * Stored as {@code text}, not {@code jsonb}: Postgres re-serialises jsonb (key order, spacing) so
+	 * the string read back was never the one that had been hashed, and the chain failed at the very
+	 * first row. The hash covers exactly the bytes kept here.
+	 */
+	@Column(nullable = false, columnDefinition = "text")
 	private String payload;
 
 	@Column(name = "prev_hash", length = 64)

@@ -206,7 +206,8 @@ Các JVM đặt `-XX:MaxRAMPercentage=70` + giới hạn `mem_limit` trong Compo
 | Transaction Engine (JVM) | ~500 MB |
 | Ledger Service (JVM) | ~500 MB |
 | Payment Gateway (JVM) | ~450 MB |
-| Notification + Audit consumer (JVM) | ~450 MB |
+| Notification consumer (JVM) | ~500 MB |
+| Audit consumer (JVM) | ~500 MB |
 | PostgreSQL | ~500 MB |
 | Redis | ~150 MB |
 | Kafka KRaft (1 node) | ~1.200 MB |
@@ -214,7 +215,7 @@ Các JVM đặt `-XX:MaxRAMPercentage=70` + giới hạn `mem_limit` trong Compo
 | Grafana | ~200 MB |
 | Loki + Promtail | ~300 MB |
 | Alertmanager | ~50 MB |
-| **Tổng** | **~6,3 GB** |
+| **Tổng** | **~6,9 GB** |
 
 → **Vừa 8GB nhưng sát ngưỡng.** Kết luận: **không thêm** Elasticsearch/Keycloak/SonarQube self-host (xem mục 9). Nếu thiếu, hạ xuống: bỏ Loki (dùng `docker logs`) hoặc chạy Grafana/Prometheus ở máy cá nhân trỏ về VPS.
 

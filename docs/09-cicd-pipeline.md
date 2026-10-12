@@ -30,6 +30,10 @@
 >
 > Trước khi pipeline chạy thật: hoàn thành mục 1 (checklist), mục 2 (VPS bootstrap) và khai báo
 > secrets ở mục 9.
+>
+> ⚠️ **ĐỌC MỤC 13 TRƯỚC KHI LÀM THEO MỤC 2, 4, 5, 9.** Các mục đó là **thiết kế ban đầu**; hạ tầng
+> thật đã phải đi đường khác vì nhà cung cấp VPS chặn chiều vào và chặn một dải IP của Microsoft.
+> Mục 13 ghi lại chính xác cái gì đang chạy, cái gì đã bỏ, và vì sao.
 
 ---
 
@@ -584,9 +588,9 @@ tư tưởng traceId của S16/doc5). Quy tắc bảo mật log: không password
 | # | Kiểm chứng | Cách chứng minh |
 |---|---|---|
 | 1 | CI chặn merge đỏ | Mở PR phá test → Actions đỏ → không merge được |
-| 2 | Test kế toán kép + idempotency chạy trong CI | Job `build-verify` chạy `*IT` Testcontainers: entries cân 0, snapshot = SUM, 100 request trùng idempotency key chỉ trừ 1 lần (README §5.2) |
-| 3 | Deploy không downtime | Merge PR đổi 1 service → quan sát upstream swap blue→green, request liên tục không 5xx (README §4 Step 4.2) |
-| 4 | Rollback tự động | Deploy image lỗi cố ý (health fail) → `deploy.sh` gọi `rollback.sh`, hệ thống về bản cũ |
+| 2 | Test kế toán kép + idempotency chạy trong CI | Job `build-verify` chạy `*IT` Testcontainers: entries cân 0, snapshot = SUM; `IdempotencyBurstIT` chạy 100 lời gọi đồng thời qua TxEngine (Ledger được mock trong bài test này), còn posting thật và gRPC được kiểm tra ở các IT Ledger riêng (README §5.2) |
+| 3 | Deploy không downtime | Acceptance test cần quan sát upstream swap blue→green và gửi request liên tục; chưa có run-level artifact trong repo chứng minh 0 request lỗi (README §4 Step 4.2) |
+| 4 | Rollback | Health-gate timeout trong `deploy.sh` gọi `rollback.sh`; chưa có bằng chứng run-level ở repo. Lỗi sau swap hoặc lỗi ở smoke test CD không đảm bảo tự rollback |
 | 5 | Alert tài chính | Inject lệch sổ trong DB test → `LedgerImbalance` bắn Telegram (README §4 Step 5) |
 | 6 | Không secret lọt repo | Commit giả chứa `AWS_SECRET...` → gitleaks đỏ |
 | 7 | Truy vết end-to-end | Gọi API có lỗi → tìm `X-Request-Id` trong Loki thấy đủ chuỗi qua các service |
@@ -604,6 +608,164 @@ tư tưởng traceId của S16/doc5). Quy tắc bảo mật log: không password
 ---
 
 **Tóm tắt một câu:** mọi commit vào `main` phải qua `verify` (unit + integration), Jib đẩy image lên
-GHCR theo SHA, VPS kéo về và swap nginx sau health-gate, lỗi thì tự rollback, và mọi thứ — từ lỗi
-giao dịch đến chênh lệch sổ cái — đều la lên trên Telegram. Không một bước nào chỉ tồn tại trên máy
-của một người.
+GHCR theo SHA, VPS kéo về và swap nginx sau health-gate; health-gate timeout có rollback path, nhưng lỗi ở smoke test sau deploy không tự gọi rollback. Monitoring/alert cần được chứng minh bằng kết quả chạy thực tế.
+
+Runbook thao tác và thu thập bằng chứng cho các tiêu chí bảo vệ ở [docs/10-defense-demo-runbook.md](10-defense-demo-runbook.md). Xem mục 13 để biết giới hạn smoke test, deploy route thực tế và các phần chưa được xác minh.
+
+---
+
+## 13. Thực tế triển khai (2026-10-11) — đường đi khác thiết kế, và vì sao
+
+Pipeline **đang chạy thật** trên VPS `160.187.228.112` (TDC Tech Data Cloud), domain
+`www.fintech-wallet4105.bid`. Nhưng những điểm dưới đây khác mục 2/4/5/9 ở trên. Không phải chọn cho
+vui — mỗi điểm đều có một phép đo cụ thể đằng sau. Người đọc lại tài liệu này **phải đọc mục 13
+trước**, kẻo làm theo mục 2 rồi ngồi chờ certbot như nhóm đã từng.
+
+### 13.1. Ràng buộc gốc: VPS không có chiều vào, và Microsoft bị chặn
+
+Đo từ nhiều nguồn ngoài (check-host, Let's Encrypt, hạ tầng độc lập):
+
+| Đích | Kết quả |
+|---|---|
+| `160.187.228.112` cổng 22/80/443 từ US/EU/Singapore | **timeout toàn bộ** |
+| cùng các cổng đó từ node Việt Nam | có phản hồi |
+| `registry-1.docker.io`, `public.ecr.aws`, `login.tailscale.com`, `ifconfig.me` (chiều ra) | timeout |
+| `gcr.io`, `api.cloudflare.com`, `api.telegram.org`, `github.com` | tới được |
+| `pipelines.actions.githubusercontent.com` → `13.107.42.16` (anycast Microsoft) | **timeout, kể cả khi trỏ thẳng IP** |
+
+Hệ quả trực tiếp: **Let's Encrypt không validate được** (server của họ ở US/EU), **runner GitHub
+không SSH vào được**, và **self-hosted runner cũng không poll được job** vì đúng cái host Microsoft
+kia bị chặn. Ba đường của thiết kế gốc chết cùng lúc, nên phải đi đường chỉ dùng chiều ra.
+
+### 13.2. Ingress: Cloudflare Tunnel thay certbot + nginx TLS tự cấp
+
+- Domain `fintech-wallet4105.bid` đăng ký qua Cloudflare Registrar (nameserver nằm sẵn ở Cloudflare).
+- `cloudflared` chạy dưới systemd trên VPS, mở kết nối **ra** edge Cloudflare (QUIC 7844 — pre-check
+  của cloudflared xác nhận UDP/TCP/API đều PASS).
+- Public hostname `www.fintech-wallet4105.bid` → `https://localhost:443`, **No TLS Verify** bật.
+- nginx vẫn giữ nguyên vai trò edge nội bộ; cert là **self-signed** đặt đúng đường dẫn
+  `/etc/letsencrypt/live/<PUBLIC_DOMAIN>/` để **không phải sửa `docker-compose.prod.yml`**.
+- **Bỏ certbot và `certbot.timer`.**
+
+### 13.3. Deploy transport: deploy hook qua HTTPS thay SSH
+
+`infra/scripts/deploy-hook.py` (systemd `fintech-deploy-hook.service`, user `deploy`,
+`HOME=/home/deploy` vì `deploy.sh` cần deploy key để `git fetch`) nghe `127.0.0.1:9000`; nginx mở
+`location /deploy-hook/` trỏ vào đó. Job `deploy` gọi HTTPS và **poll** trạng thái vì một lần
+deploy có thể vượt timeout 100s của Cloudflare origin.
+
+Hook **whitelist** tên service và bắt buộc sha đúng 40 hex — đường này công khai ra Internet nên
+không được phép biến thành chạy lệnh tuỳ ý. Xác thực bằng bearer token trong `.env`
+(`DEPLOY_HOOK_TOKEN`), không có token thì trả 401.
+
+Vẫn giữ `runs-on: ubuntu-latest` cho job `deploy` — runner GitHub chỉ *gọi* hook, không cần với tới
+VPS.
+
+### 13.4. `ghcr.io` phải pin IP trong `/etc/hosts`
+
+DNS của nhà cung cấp trả `ghcr.io` về `20.205.243.164` — IP đó không route được từ VPS. Dải thật
+của GHCR (`140.82.112.33`, `.113.33`, `.114.33`, `.121.33`) thì tới được và **verify được cert**.
+Nên bootstrap thêm 4 dòng vào `/etc/hosts`. Đây là bước bắt buộc khi dựng lại VPS, không phải mẹo
+vặt.
+
+### 13.5. Bốn lỗi trong code pipeline đã phải sửa mới chạy được
+
+| Lỗi | Triệu chứng | Sửa ở đâu |
+|---|---|---|
+| Job `changes` dựng matrix bằng `jq -R -s` trên output của `echo` | `jq` giữ dấu `\n` của `echo` ⇒ `matrix.service` có newline ⇒ dòng `./mvnw` bị bash cắt sau `-pl`, mất luôn `-am jib:build` ⇒ Maven báo "No goals have been specified" | `printf '%s'` thay `echo` |
+| `jib:build` gọi trực tiếp | Không chạy lifecycle nào ⇒ checkout sạch thì không có `target/classes` ⇒ "Obtaining project build output files failed" | thêm `-DskipTests package` trước `jib:build` |
+| `deploy.sh` giả định luôn có bản blue cũ | Lần deploy đầu tiên không có container tên `<service>` ⇒ `docker stop` lỗi ⇒ `set -e` thoát **sau khi** đã swap nginx | bọc `docker container inspect` trước khi stop/rename |
+| `deploy.sh` set `SERVER_PORT` cho **mọi** service | Eureka bị đẩy sang 9761, trong khi mọi client trỏ cứng `EUREKA_HOST:8761` ⇒ **không ai đăng ký được** ⇒ mọi route `lb://` trả 503 | chỉ đổi cổng publish của eureka, giữ cổng lắng nghe 8761 |
+
+Lỗi cuối là bài học đáng nhớ nhất: **smoke test vẫn xanh** trong khi hệ thống không nối được tới
+service nào, vì smoke test chỉ hỏi `/actuator/health` của chính gateway. Một health-check ở tầng quá
+thấp không chứng minh được gì về đường tiền.
+
+### 13.6. Secret trên VPS: 8 giá trị còn nguyên placeholder
+
+`/opt/fintech/infra/docker/.env` hiện giữ nguyên 8 giá trị mặc định của `.env.example`:
+`POSTGRES_PASSWORD`, `EUREKA_PASSWORD`, `HMAC_SECRET`, `INTERNAL_TOKEN`, `VNPAY_SECRET`,
+`STRIPE_SECRET`, `VIETQR_SECRET`, `GRAFANA_PASSWORD`.
+
+`ADMIN_PHONES` (để rỗng lúc bootstrap) đã được đặt thành phone của **tài khoản demo** để role ADMIN
+cấp được cho audit/reconciliation — giá trị thật nằm trong `.env` trên VPS, không ghi vào repo. Env chỉ
+đọc lúc `docker run`, nên muốn đổi phone phải **redeploy** `account-ledger-service`; `docker restart`
+không nạp lại `--env-file`.
+
+Đã cân nhắc và **chấp nhận cho môi trường demo**, có lý do đo được chứ không phải bỏ sót:
+
+| Secret | Vì sao rủi ro thấp |
+|---|---|
+| `POSTGRES_PASSWORD`, `GRAFANA_PASSWORD` | cổng `5432`/`3000` **không publish ra host** — chỉ trong `fintech-net` |
+| `EUREKA_PASSWORD` | chỉ `127.0.0.1:9761`, không qua nginx |
+| `INTERNAL_TOKEN` | `/internal/**` không có route nào ở gateway ⇒ không có đường vào |
+| `VNPAY/STRIPE/VIETQR_SECRET` | giá trị giả, chỉ dùng verify webhook đối tác |
+
+**Riêng `HMAC_SECRET` là ngoại lệ thật**: lớp HMAC ở gateway tồn tại để xác thực *client*, mà secret
+nằm công khai trong repo thì ai cũng ký được y hệt. JWT vẫn là chốt thứ hai nên API động tiền không
+bị gọi bừa, nhưng nếu có thời gian thì đổi đúng biến này là đủ:
+
+```bash
+cd /opt/fintech/infra/docker
+NEW=$(openssl rand -hex 32)
+sed -i "s|^HMAC_SECRET=.*|HMAC_SECRET=$NEW|" .env && chmod 600 .env
+echo "$NEW"                       # cập nhật biến hmacSecret trong client test
+docker restart api-gateway        # chỉ gateway đọc biến này
+```
+
+### 13.7. Checklist bootstrap đã sửa (thay mục 2)
+
+```bash
+# 1. gói cơ bản + git + Docker + UFW 22/80/443 (như mục 2.1-2.3, giữ nguyên)
+# 2. clone /opt/fintech bằng deploy key read-only của VPS (mục 2.4, giữ nguyên)
+# 3. .env tại /opt/fintech/infra/docker/.env (KHÔNG phải /opt/fintech/.env như checklist mục 1)
+#    - sinh JWT_SECRET bằng `openssl rand -base64 48`  <-- PHẢI là base64 CHUẨN, không phải
+#      base64url: JwtUtils dùng Decoders.BASE64, ký tự '-' hoặc '_' làm app chết lúc khởi động
+#    - điền DEPLOY_HOOK_TOKEN (openssl rand -hex 32), phải trùng GitHub secret cùng tên
+# 4. docker compose -f infra/docker/docker-compose.yml up -d        # hạ tầng
+# 5. pin ghcr.io vào /etc/hosts (13.4) và cấu hình registry mirror mirror.gcr.io (Docker Hub
+#    không tới được từ VPS này)
+# 6. docker login ghcr.io   (hoặc để package public nếu repo public)
+# 7. self-signed cert tại /etc/letsencrypt/live/<PUBLIC_DOMAIN>/  (không dùng certbot)
+# 8. docker compose ... up -d nginx                                  # cần đủ 3 file compose
+# 9. sudo cp infra/systemd/fintech-deploy-hook.service /etc/systemd/system/ && enable --now
+# 10. cloudflared service install <token>  + khai public hostname trên Zero Trust
+# 11. deploy 7 service (hoặc bấm workflow_dispatch để CI/CD làm)
+```
+
+### 13.8. Còn nợ
+
+- **`grpc.conf` là vhost chết**: `upstream ledger_grpc` trỏ `127.0.0.1:9090` nhưng `deploy.sh` không
+  publish cổng gRPC. Sửa đúng phải swap **cả** cổng gRPC trong blue/green (green `10090`) và `sed`
+  thêm một dòng trong `deploy.sh` + `rollback.sh`. Chưa làm vì gRPC nội bộ
+  (`transaction-engine → account-ledger-service:9090` qua `fintech-net`) đã chạy và không ai gọi
+  gRPC từ ngoài.
+- **Log deploy chạy qua hook** hiện không vào `journalctl` của một service nào ngoài
+  `fintech-deploy-hook`; muốn lưu vết dài hạn thì thêm `StandardOutput` vào file.
+- **Cloudflare Tunnel thay certbot** nghĩa là TLS do Cloudflare lo; origin dùng self-signed. Muốn
+  origin cũng có cert thật thì dùng certbot DNS-01 với `cloudflare` plugin (giờ zone đã ở
+  Cloudflare nên làm được) — không bắt buộc.
+
+### 13.9. Đã sửa sau lần chạy đầu (2026-10-12)
+
+- **`mem_limit` 320m quá nhỏ cho `MaxRAMPercentage=70`**: heap bị chặn ở 70% limit nên phần non-heap
+  (metaspace/code cache/thread/direct buffer) chỉ còn ~96m — không đủ cho một JVM Kafka + JPA.
+  `notification-service` bị kernel OOM-kill (`docker events`: `oom` → `die exitCode=137`, cgroup
+  `memory.peak` chạm đúng `memory.max`) vài phút một lần, kéo cả 4 endpoint 28–31 xuống; `audit-service`
+  cũng đã restart 17 lần cùng nguyên nhân. Đã nâng `NOTIFICATION_SERVICE_MEM` và `AUDIT_SERVICE_MEM`
+  lên `512m`.
+- **Prometheus `up=0` cho 6/7 service backend**: `prometheus.yml` trỏ cổng base
+  (`notification-service:8084`…) nhưng blue/green đã dời service sang `base+1000`/`+2000`, nên dashboard
+  và alert gắn label `application` không có dữ liệu. Đã thêm
+  `infra/scripts/sync-prometheus-targets.sh`, gọi ở cuối `deploy.sh`/`rollback.sh`: nó viết lại **toàn
+  bộ** target backend từ `upstream.conf` (nguồn chân lý duy nhất về cổng đang chạy) rồi
+  `docker kill -s HUP prometheus` để reload — SIGHUP không cần `--web.enable-lifecycle`. Phải sync toàn
+  bộ chứ không chỉ service vừa deploy, vì `git checkout` trong `deploy.sh` làm `prometheus.yml` quay về
+  cổng base.
+- **`/api/v1/audit/verify-chain` luôn `valid:false`**: `AuditLog.payload` map `jsonb` nên Postgres
+  chuẩn hoá lại chuỗi (đổi thứ tự key, thêm space), `hash` đã tính không còn khớp `sha256(payload)` ⇒
+  fail ngay bản ghi đầu (`checkedEntries:0`), dù bản ghi đầu đúng là genesis. Đã đổi cột sang `text`
+  (docs/03 §7.1). Với DB **đã tồn tại**, `ddl-auto=update` không đổi kiểu cột nên phải chạy tay một lần:
+  `TRUNCATE audit_logs; ALTER TABLE audit_logs ALTER COLUMN payload TYPE text USING payload::text;`
+  (chuỗi cũ dựng trên `jsonb` vốn không thể validate, nên bắt đầu chuỗi mới; bootstrap mới không cần
+  bước này).

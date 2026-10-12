@@ -23,6 +23,9 @@ if [ -n "$OLD" ]; then
       infra/nginx/conf.d/upstream.conf
     docker exec nginx nginx -t
     docker exec nginx nginx -s reload
+    # a failed sync must not turn a rollback into a failure
+    bash "$BASE/infra/scripts/sync-prometheus-targets.sh" \
+      || echo "[rollback] warning: prometheus targets not synced" >&2
   fi
   docker rm -f "${SERVICE}-green" >/dev/null 2>&1 || true
   docker start "$OLD" >/dev/null

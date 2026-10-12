@@ -335,7 +335,8 @@ public class AuditLog {
     @Column(name = "event_type", nullable = false, length = 48) private String eventType;
     @Column(name = "aggregate_id") private UUID aggregateId;
     @Column(name = "actor", length = 64) private String actor;                          // userId hoặc SYSTEM
-    @JdbcTypeCode(SqlTypes.JSON) @Column(nullable = false, columnDefinition = "jsonb") private String payload;
+    /** text, KHÔNG jsonb: Postgres chuẩn hoá lại jsonb nên chuỗi đọc ra khác chuỗi đã hash. */
+    @Column(nullable = false, columnDefinition = "text") private String payload;
 
     @Column(name = "prev_hash", length = 64) private String prevHash;                   // hash bản ghi trước
     @Column(name = "hash", nullable = false, length = 64) private String hash;          // SHA-256(prevHash + payload)
@@ -344,7 +345,10 @@ public class AuditLog {
     @Column(name = "recorded_at", nullable = false) private Instant recordedAt;
 }
 ```
-> **Chuỗi hash** cho phép phát hiện sửa đổi: `hash_n = SHA256(hash_{n-1} + canonical(payload))`. Có endpoint verify toàn chuỗi.
+> **Chuỗi hash** cho phép phát hiện sửa đổi: `hash_n = SHA256(hash_{n-1} + payload)`. `payload` lưu
+> dạng `text` để chuỗi đọc ra đúng bằng chuỗi đã hash — để `jsonb` thì Postgres tự chuẩn hoá (đổi thứ
+> tự key, thêm space) và `verify-chain` fail ngay từ bản ghi đầu. DB đã tạo bằng `jsonb` cần chuyển tay
+> một lần: `TRUNCATE audit_logs; ALTER TABLE audit_logs ALTER COLUMN payload TYPE text USING payload::text;`
 
 ### 7.2. `ReconciliationReport`
 ```java
