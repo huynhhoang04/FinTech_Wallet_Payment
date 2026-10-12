@@ -12,6 +12,13 @@ spring:
     gateway:
       server:
         webflux:
+          httpclient:
+            pool:
+              # Backend Tomcats close idle keep-alive connections (~20s). Without this, the
+              # gateway reuses a connection the server already closed and the first request
+              # after an idle gap dies with PrematureCloseException -> 500.
+              max-idle-time: 10s
+              eviction-interval: 5s
           discovery:
             locator:
               enabled: false
