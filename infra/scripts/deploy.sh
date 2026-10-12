@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# Blue/green per service: start green on (blue port + 1000), health-gate /actuator/health,
+# Blue/green per service: start green on (current blue port + 1000), health-gate /actuator/health,
 # swap infra/nginx/conf.d/upstream.conf, keep the old container stopped for rollback.
 # Usage: deploy.sh <service> <git-sha>   (CD runs this on the VPS in /opt/fintech)
 #
 # Notes:
+# - The blue port is read from the live upstream.conf, never assumed to be the base port. After the
+#   first deploy a service runs on base+1000, so the old fixed assumption either collided with the
+#   running container ("port is already allocated") or left upstream pointing at a stopped one.
 # - After a successful swap the new container carries the compose container_name, so compose
 #   no longer manages this service - all further deploys of it go through this script.
 # - Old stopped containers (<service>-old-*) are removed at the start of the NEXT deploy of
@@ -14,7 +17,27 @@ SERVICE="$1"; SHA="$2"; BASE=/opt/fintech
 
 declare -A PORTS=( [api-gateway]=8080 [transaction-engine]=8081 [account-ledger-service]=8082 \
   [payment-gateway-service]=8083 [notification-service]=8084 [audit-service]=8085 [eureka-server]=8761 )
-PORT="${PORTS[$SERVICE]:?unknown service}"; GREEN=$((PORT + 1000))
+declare -A UPSTREAM=( [api-gateway]=gateway [transaction-engine]=tx_engine \
+  [account-ledger-service]=ledger_http [payment-gateway-service]=payment \
+  [notification-service]=notification [audit-service]=audit )
+
+BASE_PORT="${PORTS[$SERVICE]:?unknown service}"
+UP="${UPSTREAM[$SERVICE]:-}"
+
+cd "$BASE"
+
+# Current blue port: the upstream line for HTTP services; for eureka-server (no upstream - clients
+# address it by the fixed service name) the host port its running container publishes.
+CURRENT=""
+if [ -n "$UP" ]; then
+  CURRENT="$(grep -oP "upstream\s+${UP}\s*\{\s*server 127\.0\.0\.1:\K[0-9]+" \
+    infra/nginx/conf.d/upstream.conf || true)"
+else
+  CURRENT="$(docker port "$SERVICE" 2>/dev/null | grep -oP '127\.0\.0\.1:\K[0-9]+' | head -1 || true)"
+fi
+[ -n "$CURRENT" ] || CURRENT="$BASE_PORT"
+PORT="$CURRENT"
+GREEN=$((PORT + 1000))
 
 # Every other service is discovered through Eureka, and Eureka hands out the port it saw
 # the instance register on - so moving a service's port is safe. eureka-server is the one
@@ -42,7 +65,7 @@ git fetch --all --quiet && git checkout --quiet "$SHA"   # config always comes f
 docker pull "$IMAGE"                                      # needs `docker login ghcr.io` once at bootstrap
 
 docker rm -f "${SERVICE}-green" >/dev/null 2>&1 || true
-echo "[deploy] start green ${SERVICE}@${GREEN}"
+echo "[deploy] start green ${SERVICE}@${GREEN} (blue was ${PORT})"
 docker run -d --name "${SERVICE}-green" --network fintech-net --restart unless-stopped \
   --env-file infra/docker/.env "${RUN_ARGS[@]}" \
   --memory "$MEM" \
@@ -52,7 +75,10 @@ for i in $(seq 1 30); do
   sleep 3
   if curl -fsS "http://127.0.0.1:${GREEN}/actuator/health" | grep -q '"status":"UP"'; then
     echo "[deploy] green healthy - swap nginx upstream"
-    sed -i "s|127\.0\.0\.1:${PORT}|127.0.0.1:${GREEN}|" infra/nginx/conf.d/upstream.conf
+    if [ -n "$UP" ]; then
+      sed -i "s|^\(upstream *${UP} *{ *server *127\.0\.0\.1:\)[0-9]*|\1${GREEN}|" \
+        infra/nginx/conf.d/upstream.conf
+    fi
     docker exec nginx nginx -t
     docker exec nginx nginx -s reload
     # the very first deploy of a service has no blue container to stop or keep around

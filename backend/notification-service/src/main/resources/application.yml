@@ -45,6 +45,8 @@ app:
     token: ${INTERNAL_TOKEN}
   security:
     jwt-secret: ${JWT_SECRET}
+  ledger:
+    base-url: ${LEDGER_BASE_URL:http://account-ledger-service}
   notification:
     from: ${MAIL_FROM:no-reply@wallet.local}
     demo-recipient: ${DEMO_RECIPIENT:demo@wallet.local}

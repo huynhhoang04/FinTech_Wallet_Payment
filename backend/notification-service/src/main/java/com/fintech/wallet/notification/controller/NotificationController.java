@@ -8,6 +8,7 @@ import com.fintech.wallet.notification.domain.DeadLetterEvent;
 import com.fintech.wallet.notification.domain.NotificationLog;
 import com.fintech.wallet.notification.repository.DeadLetterEventRepository;
 import com.fintech.wallet.notification.repository.NotificationLogRepository;
+import com.fintech.wallet.notification.service.LedgerAccountsClient;
 import com.fintech.wallet.notification.service.NotificationService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -22,8 +23,10 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * The subject comes from the JWT, not from a query parameter (docs 07 SEC-03). The internal
- * endpoints still name the user explicitly, and are reachable only with the internal token.
+ * The subject comes from the JWT, not from a query parameter (docs 07 SEC-03). Notification rows are
+ * keyed by the wallet account the balance event belongs to, so the caller's accounts are resolved
+ * through the ledger before filtering. The internal endpoints still name the user explicitly, and are
+ * reachable only with the internal token.
  */
 @RestController
 public class NotificationController {
@@ -33,19 +36,25 @@ public class NotificationController {
 	private final NotificationLogRepository logs;
 	private final DeadLetterEventRepository deadLetters;
 	private final NotificationService notifications;
+	private final LedgerAccountsClient accounts;
 
 	public NotificationController(NotificationLogRepository logs, DeadLetterEventRepository deadLetters,
-			NotificationService notifications) {
+			NotificationService notifications, LedgerAccountsClient accounts) {
 		this.logs = logs;
 		this.deadLetters = deadLetters;
 		this.notifications = notifications;
+		this.accounts = accounts;
 	}
 
 	@GetMapping("/api/v1/notifications")
 	public PageResponse<NotificationView> list(@RequestParam(defaultValue = "0") int page,
 			@RequestParam(defaultValue = "20") int size) {
-		Page<NotificationLog> found = logs.findByUserIdOrderByCreatedAtDesc(UUID.fromString(CurrentUser.userId()),
-				PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE)));
+		PageRequest pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE));
+		List<UUID> accountIds = accounts.accountIdsOf(CurrentUser.userId());
+		if (accountIds.isEmpty()) {
+			return PageResponse.of(List.of(), pageable.getPageNumber(), pageable.getPageSize(), 0);
+		}
+		Page<NotificationLog> found = logs.findByUserIdInOrderByCreatedAtDesc(accountIds, pageable);
 		return PageResponse.of(found.getContent().stream().map(NotificationView::of).toList(),
 				found.getNumber(), found.getSize(), found.getTotalElements());
 	}
@@ -72,8 +81,7 @@ public class NotificationController {
 	private NotificationLog requireOwned(UUID id) {
 		NotificationLog entry = logs.findById(id)
 				.orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "Không tìm thấy thông báo"));
-		String userId = CurrentUser.userId();
-		if (!entry.getUserId().toString().equals(userId)) {
+		if (!accounts.accountIdsOf(CurrentUser.userId()).contains(entry.getUserId())) {
 			throw new BusinessException(ErrorCode.NOT_FOUND, "Không tìm thấy thông báo");
 		}
 		return entry;

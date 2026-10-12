@@ -5,11 +5,14 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.UUID;
 
 public interface NotificationLogRepository extends JpaRepository<NotificationLog, UUID> {
 
 	Page<NotificationLog> findByUserIdOrderByCreatedAtDesc(UUID userId, Pageable pageable);
+
+	Page<NotificationLog> findByUserIdInOrderByCreatedAtDesc(Collection<UUID> userIds, Pageable pageable);
 
 	boolean existsByTemplateCodeAndRelatedTransactionId(String templateCode, UUID relatedTransactionId);
 }

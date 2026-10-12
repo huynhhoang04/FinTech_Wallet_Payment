@@ -39,6 +39,19 @@ public class InternalLedgerController {
 		return queryService.getBalance(accountId);
 	}
 
+	/**
+	 * Account ids owned by a user. The wallet owner lives here, not in the services that consume
+	 * balance events, so a caller that knows only the identity user id (e.g. notification-service)
+	 * resolves its wallets through this endpoint.
+	 */
+	@GetMapping("/accounts/owner/{ownerUserId}")
+	public OwnedAccountsView accountsByOwner(@PathVariable UUID ownerUserId) {
+		List<UUID> accountIds = queryService.accountsByOwner(ownerUserId).stream()
+				.map(LedgerQueryService.AccountInfo::accountId)
+				.toList();
+		return new OwnedAccountsView(ownerUserId.toString(), accountIds);
+	}
+
 	@GetMapping("/accounts/{accountId}/verify-balance")
 	public BalanceVerification verifyBalance(@PathVariable UUID accountId) {
 		long snapshot = accountBalanceRepository.findFirstByAccountId(accountId)
@@ -67,6 +80,9 @@ public class InternalLedgerController {
 	}
 
 	public record BalanceVerification(String accountId, long snapshotBalance, long computedBalance, boolean consistent) {
+	}
+
+	public record OwnedAccountsView(String ownerUserId, List<UUID> accountIds) {
 	}
 
 	public record LedgerSummary(String date, long totalDebit, long totalCredit, long difference) {
