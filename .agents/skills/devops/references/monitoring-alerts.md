@@ -34,7 +34,7 @@ groups:
   - name: financial
     rules:
       - alert: LedgerImbalance
-        expr: ledger_imbalance_total > 0
+        expr: ledger_imbalance > 0
         for: 1m
         labels: { severity: critical }
         annotations:
@@ -83,7 +83,7 @@ delay. Configure the bot token and chat id from `.env`, never hardcoded.
 
 | Metric | Type | Source | Why |
 |---|---|---|---|
-| `ledger_imbalance_total` | gauge | `audit-service` | The single most important number: must stay 0 |
+| `ledger_imbalance` | gauge | `audit-service` | The single most important number: must stay 0 |
 | `reconciliation_last_success_timestamp_seconds` | gauge | `audit-service` | Detects a silently broken reconciliation job |
 | `fraud_alerts_total{rule,decision}` | counter | `transaction-engine` | Visibility into abuse |
 | `idempotent_replays_total` | counter | `transaction-engine` | Retry pressure / duplicate submissions |
@@ -96,7 +96,7 @@ Register them with Micrometer; do not compute them at scrape time from the datab
 1. Transaction throughput (`rate(http_server_requests_seconds_count[1m])` by service).
 2. p95 latency (`histogram_quantile(0.95, ...)` on the transfer endpoint).
 3. Error rate (5xx share) with the 2% alert line drawn.
-4. **Ledger imbalance** - the `ledger_imbalance_total` value, alongside the last
+4. **Ledger imbalance** - the `ledger_imbalance` value, alongside the last
    reconciliation timestamp.
 5. VPS resources: CPU, RAM, disk, per-container memory (`container_memory_usage_bytes`).
 6. Kafka consumer lag per topic.

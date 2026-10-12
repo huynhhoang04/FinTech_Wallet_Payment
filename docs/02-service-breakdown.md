@@ -337,7 +337,7 @@ grpc.server.port: 9090
 - **Làm:**
   - Consumer Kafka: nghe **mọi** event → ghi **immutable audit log** (append-only; mỗi bản ghi có `hash` liên kết bản ghi trước → chuỗi hash phát hiện sửa đổi).
   - **Job đối chiếu định kỳ**: kiểm tra tổng Debit + Credit = 0 trên toàn sổ; nếu lệch → **bắn alert** (log ERROR + metric + webhook Telegram).
-  - Expose **custom metric** cho Prometheus: `ledger_imbalance_total`, `reconciliation_last_success_timestamp`.
+  - Expose **custom metric** cho Prometheus: `ledger_imbalance`, `reconciliation_last_success_timestamp`.
   - Lưu báo cáo đối soát theo ngày.
 - **Không làm:** Không can thiệp giao dịch, không sửa dữ liệu (chỉ ghi thêm).
 

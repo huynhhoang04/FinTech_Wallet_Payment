@@ -146,7 +146,7 @@ gantt
 **Ngày 8 (05/10):**
 - `audit-service`: `AuditLog` (chuỗi hash), `ReconciliationReport`.
 - Job đối chiếu (Spring Batch, fallback `@Scheduled`) → `difference` phải = 0.
-- Custom metric `ledger_imbalance_total`, `reconciliation_last_success_timestamp_seconds`.
+- Custom metric `ledger_imbalance`, `reconciliation_last_success_timestamp_seconds`.
 
 **DoD ngày 8:**
 - [ ] `GET /api/v1/audit/verify-chain` → `valid: true`.

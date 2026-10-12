@@ -13,8 +13,11 @@ scrape_configs:
       - host: unix:///var/run/docker.sock
         refresh_interval: 15s
     relabel_configs:
+      # Blue/green starts the new container as <service>-green and only renames it to <service> after
+      # the health gate, and promtail keeps the container name it saw first. Strip the slot suffix so
+      # log queries use the logical service name instead of `audit-service-green`.
       - source_labels: [__meta_docker_container_name]
-        regex: /(.*)
+        regex: /(.*?)(-green|-old-[0-9]+)?$
         target_label: container
     pipeline_stages:
       # docker json-file wraps the app's own JSON line; unwrap it so Grafana can `| json` it

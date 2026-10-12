@@ -409,7 +409,7 @@ Chạy đối chiếu thủ công cho 1 ngày → dùng cho demo.
 | Method | Path | Mô tả |
 |---|---|---|
 | GET | `/actuator/health` | Health |
-| GET | `/actuator/prometheus` | **Metrics** `ledger_imbalance_total`, `reconciliation_last_success_timestamp_seconds` |
+| GET | `/actuator/prometheus` | **Metrics** `ledger_imbalance`, `reconciliation_last_success_timestamp_seconds` |
 
 ---
 

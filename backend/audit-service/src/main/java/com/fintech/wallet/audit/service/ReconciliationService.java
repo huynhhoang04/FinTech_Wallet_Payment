@@ -47,7 +47,10 @@ public class ReconciliationService {
 		this.objectMapper = objectMapper;
 		this.internalToken = internalToken;
 		this.ledger = restClientBuilder.baseUrl(ledgerBaseUrl).build();
-		Gauge.builder("ledger_imbalance_total", imbalance, AtomicLong::get)
+		// Named ledger_imbalance, not ledger_imbalance_total: Micrometer strips a trailing "_total"
+		// when exporting to Prometheus (that suffix belongs to counters), so the alert rule and the
+		// Grafana panel have to query the name it is actually exported under.
+		Gauge.builder("ledger_imbalance", imbalance, AtomicLong::get)
 				.description("Total of the whole ledger; must stay 0")
 				.register(meterRegistry);
 		Gauge.builder("reconciliation_last_success_timestamp_seconds", lastSuccessEpochSeconds, AtomicLong::get)

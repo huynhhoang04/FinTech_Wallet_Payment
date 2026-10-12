@@ -533,14 +533,14 @@ scrape_configs:
 
 | Alert | Điều kiện | Vì sao |
 |---|---|---|
-| `LedgerImbalance` | `ledger_imbalance_total != 0` | Nợ ≠ Có trong sổ cái = tiền bị sinh/mất (README §4 Step 5; audit STT 37/54) |
+| `LedgerImbalance` | `ledger_imbalance != 0` | Nợ ≠ Có trong sổ cái = tiền bị sinh/mất (README §4 Step 5; audit STT 37/54) |
 | `TxErrorRateHigh` | rate lỗi giao dịch > 2% trong 5m | README §4 Step 5 |
 | `ServiceDown` | `up == 0` trong 1m | (S14/doc5) |
 | `VpsResourcePressure` | RAM hoặc disk > 85% | headroom mỏng (mục 7) |
 | `ReconciliationStale` | `time() - reconciliation_last_success_timestamp_seconds > 90000` | đối chuẩn đêm im lặng là mất lớp bảo vệ cuối |
 
 Alertmanager → Telegram (cùng bot với CD notify). Dashboard Grafana tối thiểu: throughput, p95
-latency, error rate, tài nguyên VPS, **panel `ledger_imbalance_total`** (devops-skill §8).
+latency, error rate, tài nguyên VPS, **panel `ledger_imbalance`** (devops-skill §8).
 
 ### 8.3. Log tập trung
 

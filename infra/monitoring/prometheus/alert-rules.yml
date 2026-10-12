@@ -2,7 +2,7 @@ groups:
   - name: financial
     rules:
       - alert: LedgerImbalance
-        expr: ledger_imbalance_total != 0
+        expr: ledger_imbalance != 0
         for: 2m
         labels:
           severity: critical

@@ -152,7 +152,7 @@ free -h
 - Grafana dashboards: transaction throughput, p95 latency, error rate, VPS resources, and the
   **ledger imbalance** panel.
 - Alertmanager routes to Telegram. The financial alerts are non-negotiable:
-  `ledger_imbalance_total > 0`, transaction error rate > 2%, service down, RAM/disk > 85%.
+  `ledger_imbalance > 0`, transaction error rate > 2%, service down, RAM/disk > 85%.
 - Loki + Promtail collect JSON logs; search by `requestId`/`traceId` across services.
 
 Alert rule definitions and dashboard queries:
