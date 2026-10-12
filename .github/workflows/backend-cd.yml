@@ -3,7 +3,9 @@ name: backend-cd
 on:
   push:
     branches: [main]
-    paths: ['backend/**']
+    # .github/workflows too: a change to the deploy pipeline has to be exercised by the pipeline
+    # that owns it, otherwise a broken deploy job is only discovered on the next service change.
+    paths: ['backend/**', '.github/workflows/**']
   workflow_dispatch:
     inputs:
       services:
@@ -39,12 +41,15 @@ jobs:
       services_json: ${{ steps.diff.outputs.services_json }}
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 2 }
+        # 0, not 2: the whole push range has to be reachable, not just its last commit
+        with: { fetch-depth: 0 }
 
       - id: diff
         env:
           EVENT_NAME: ${{ github.event_name }}
           SERVICES_OVERRIDE: ${{ inputs.services }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_HEAD: ${{ github.sha }}
         run: |
           # dependency order: eureka first, then the ledger tx-engine calls over gRPC,
           # then the edge and the consumers
@@ -53,8 +58,16 @@ jobs:
             # manual run: an empty box means "place the whole stack", never "deploy nothing"
             SERVICES="${SERVICES_OVERRIDE:-$ALL}"
           else
+            # Diff the whole push, not only its last commit: HEAD~1..HEAD silently skipped every
+            # module touched by an earlier commit of the same push, so a two-commit push built and
+            # deployed just the second one.
+            BASE="${PUSH_BEFORE:-}"
+            if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ] \
+              || ! git cat-file -e "${BASE}^{commit}" 2>/dev/null; then
+              BASE="$(git rev-parse HEAD~1 2>/dev/null || git rev-parse HEAD)"
+            fi
             # proto/ or common/ changed -> rebuild every service (they are -am deps of all of them)
-            CHANGED=$(git diff --name-only HEAD~1 HEAD | sed 's|^backend/||' | cut -d/ -f1 | sort -u)
+            CHANGED=$(git diff --name-only "$BASE" "${PUSH_HEAD:-HEAD}" | sed 's|^backend/||' | cut -d/ -f1 | sort -u)
             if echo "$CHANGED" | grep -qE '^(proto|common)$'; then
               SERVICES="$ALL"
             else

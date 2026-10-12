@@ -769,3 +769,9 @@ docker restart api-gateway        # chỉ gateway đọc biến này
   `TRUNCATE audit_logs; ALTER TABLE audit_logs ALTER COLUMN payload TYPE text USING payload::text;`
   (chuỗi cũ dựng trên `jsonb` vốn không thể validate, nên bắt đầu chuỗi mới; bootstrap mới không cần
   bước này).
+- **CD bỏ qua module của commit không-phải-cuối**: job `changes` diff `HEAD~1 HEAD` nên một push nhiều
+  commit chỉ build/deploy module của commit **cuối** — push `audit-service` rồi `infra` ở hai commit thì
+  audit-service không được deploy, mà run vẫn **xanh** (`SERVICES` rỗng) nên rất khó phát hiện. Đã đổi
+  sang diff cả push (`github.event.before`..`github.sha`, `fetch-depth: 0`, fallback `HEAD~1` khi
+  before rỗng/không tồn tại) và thêm `.github/workflows/**` vào `paths` để sửa pipeline cũng chạy lại
+  chính pipeline đó.
