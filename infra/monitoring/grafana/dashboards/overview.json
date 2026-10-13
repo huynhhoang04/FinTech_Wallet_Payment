@@ -167,11 +167,58 @@
       "fieldConfig": { "defaults": { "unit": "decmib" }, "overrides": [] }
     },
     {
+      "id": 10,
+      "type": "bargauge",
+      "title": "gRPC calls in last 5m (server-side)",
+      "description": "Dem tu chinh ledger (grpc_server_call_duration_seconds_count cua grpc-java). Gui 1 transfer -> PostTransfer +1 va GetAccountByNumber +1. Neu RPC that bai thi grpc_status la INVALID_ARGUMENT/FAILED_PRECONDITION chu khong phai OK.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 20 },
+      "targets": [
+        {
+          "expr": "sum by (grpc_method) (increase(grpc_server_call_duration_seconds_count{grpc_method=~\"ledger.*\"}[5m]))",
+          "legendFormat": "{{grpc_method}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "displayMode": "gradient",
+        "orientation": "horizontal"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "orange", "value": 50 }
+          ] }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "gRPC latency by RPC (server-side)",
+      "description": "Trung binh cong tren histogram phia server (sum/count), tinh tu luc service khoi dong - gom ca lan goi dau (JIT). Day la latency gRPC THAT, khong phai latency end-to-end cua API.",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 20 },
+      "targets": [
+        {
+          "expr": "sum by (grpc_method) (grpc_server_call_duration_seconds_sum{grpc_method=~\"ledger.*\"}) / sum by (grpc_method) (grpc_server_call_duration_seconds_count{grpc_method=~\"ledger.*\"})",
+          "legendFormat": "{{grpc_method}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    },
+    {
       "id": 9,
       "type": "logs",
       "title": "Logs (search by X-Request-Id)",
       "datasource": { "type": "loki", "uid": "${DS_LOKI}" },
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 20 },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 26 },
       "targets": [
         { "expr": "{container=~\"fintech.*|transaction-engine.*|account-ledger-service.*|payment-gateway-service.*|notification-service.*|audit-service.*|api-gateway.*\"}", "refId": "A" }
       ]
