@@ -196,6 +196,19 @@ với **deadline 3 giây**; đồng thời 8 RPC của `ledger.proto` gọi đư
 
 Trong collection **04 - Ledger gRPC**, env **`vps-grpc`**, `protoPath = proto/ledger.proto` đã đặt sẵn.
 
+> **Đường dự phòng không cần Bruno** (đã chạy thật qua tunnel, nên dùng khi trình bày cho chắc):
+> ```bash
+> python3 infra/scripts/ledger-grpc-demo.py             # 5 RPC chỉ đọc
+> python3 infra/scripts/ledger-grpc-demo.py --posting   # thêm PostTransfer/Withdraw/Deposit
+> ```
+> Script tự encode/decode protobuf (không cần `protoc`, không cần stub), chạy qua tunnel
+> (`127.0.0.1:9090`) hoặc trên VPS (`--host 172.18.0.x:9090` của container ledger) và in dữ liệu đã decode.
+> `--posting` **có đổi tiền thật** (mặc định 1 VND, tự sinh `transactionId` mới nên chạy lại là no-op).
+>
+> Cảnh báo khi dùng Bruno: nếu Message editor hiện nội dung **méo** (mất vài ký tự đầu dòng), đó là
+> **bản nháp đang cache trong tab**, không phải nội dung file — đóng tab rồi mở lại (hoặc quit hẳn Bruno)
+> để nó đọc lại `.bru` từ đĩa trước khi Send.
+
 **Thứ tự khuyến nghị — chạy 5 RPC chỉ-đọc trước (không đổi dữ liệu):**
 
 | Thứ tự | Request | Body cần để ý | Kết quả mong đợi |
