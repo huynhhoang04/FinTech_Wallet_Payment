@@ -190,7 +190,38 @@ với **deadline 3 giây**; đồng thời 8 RPC của `ledger.proto` gọi đư
 | 2 | Lấy transactionId + ledger entries | `[BRUNO]` | `15 - Get Ledger Entries` | Có bút toán ⇒ gRPC đã chạy thành công | Nếu gRPC hỏng, không thể có `ledger_entries` |
 | 3 | Đo latency end-to-end | `[SSH]` | `curl -s -o /dev/null -w 'total=%{time_total}s\n' …` (hoặc đọc `time` của Bruno) | Ghi rõ đây là **end-to-end**, không phải gRPC thuần | Trung thực về phương pháp đo — đúng yêu cầu phản biện |
 | 4 | Xem log TxEngine gọi ledger | `[SSH]` | `docker logs --tail 50 transaction-engine \| grep -i -E "grpc\|ledger"` | Thấy dấu vết gọi ledger | Bằng chứng phía client |
-| 5 | Xem metric latency gRPC | `[SSH]` | `curl -s http://127.0.0.1:<port ledger>/actuator/prometheus \| grep -i grpc` | Có metric `grpc_server_requests…` | Bằng chứng phía server (nếu Prometheus chưa scrape được thì đọc trực tiếp actuator) |
+| 5 | Xem metric gRPC **phía server** | `[SSH]`/`[LAPTOP]` | `curl -s http://127.0.0.1:8082/actuator/prometheus \| grep grpc_server_call_duration_seconds_count` | Thấy counter theo từng `grpc_method` = `ledger.v1.LedgerService/<Rpc>` | Đây là bằng chứng **server-side**: RPC đã thực sự chạy trên ledger, không phải chỉ "client nói đã gọi" |
+
+**5.3.A.1. Bằng chứng gRPC mạnh nhất: counter + latency thật của server** (đã đo, dùng để chiếu)
+
+```bash
+# tren VPS (hoac laptop qua tunnel): counter theo tung RPC, va latency trung binh moi RPC
+curl -s http://127.0.0.1:8082/actuator/prometheus | grep 'grpc_server_call_duration_seconds_count{.*LedgerService'
+curl -s http://127.0.0.1:8082/actuator/prometheus | grep 'grpc_server_call_duration_seconds_sum{.*LedgerService'
+# hoac hoi Prometheus (qua tunnel 9091) - cung so lieu, da duoc scrape:
+#   grpc_server_call_duration_seconds_count{grpc_method=~"ledger.*"}
+#   sum by (grpc_method) (rate(grpc_server_call_duration_seconds_sum{grpc_method=~"ledger.*"}[5m]))
+#     / sum by (grpc_method) (rate(grpc_server_call_duration_seconds_count{grpc_method=~"ledger.*"}[5m]))
+```
+
+Kết quả đo thật (10 series, đủ 8 RPC + 2 lần `INVALID_ARGUMENT` từ bước test âm):
+
+| RPC | Latency trung bình (server-side) |
+|---|---|
+| `Withdraw` | ~78 ms *(lần gọi đầu sau khởi động, có JIT)* |
+| `Deposit` | ~38 ms |
+| `PostTransfer` | ~31 ms |
+| `GetStatement` | ~29 ms |
+| `GetBalance` | ~20 ms |
+| `GetAccountByNumber` | ~15 ms |
+| `GetAccountsByOwner` | ~10 ms |
+| `GetLedgerEntries` | ~9.5 ms |
+
+> ✅ **Nhờ metric này, tiêu chí 3 có số liệu gRPC THẬT (server-side)**, không cần vin vào "latency end-to-end".
+> Nói cho đúng phương pháp khi bị hỏi: đây là **trung bình cộng trên histogram của server**, gồm cả lần gọi đầu
+> (JIT ấm máy) — muốn số sạch thì chạy vài vòng rồi lấy; **không** phải benchmark tải (không có k6/wrk cho gRPC).
+> `grpc_status` cũng nằm trong label (`OK`, `INVALID_ARGUMENT`…) nên chứng minh được cả **error mapping** của server.
+
 
 ### 5.3.B. Gọi 8 RPC bằng Bruno (đã bật sẵn proto local, **không** dùng reflection)
 
