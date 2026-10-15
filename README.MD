@@ -1,4 +1,4 @@
-# ĐỀ TÀI 5: HỆ THỐNG VÍ ĐIỆN TỬ VÀ CỔNG THANH TOÁN NỘI BỘ DOANH NGHIỆP (FINTECH WALLET & PAYMENT GATEWAY)
+# HỆ THỐNG VÍ ĐIỆN TỬ VÀ CỔNG THANH TOÁN NỘI BỘ DOANH NGHIỆP (FINTECH WALLET & PAYMENT GATEWAY)
 
 ## 1. TỔNG QUAN VỀ ĐỀ TÀI
 - **Tên đề tài:** Thiết kế hệ thống Ví điện tử và Cổng thanh toán tài chính doanh nghiệp (FinTech Core System) trên kiến trúc Microservices.
@@ -135,7 +135,7 @@ server {
 
 ---
 
-## 5. TIÊU CHÍ ĐÁNH GIÁ & YÊU CẦU BÀI LÀM CHO SINH VIÊN
+## 5. TIÊU CHÍ ĐÁNH GIÁ & YÊU CẦU 
 1. **Tính Toàn vẹn Tài chính (Financial Integrity):** Chứng minh thiết kế DB và Code tuân thủ đúng nguyên tắc Kế toán kép, không bị lệch tiền trong mọi trường hợp.
 2. **Xử lý Idempotency & Concurrency:** Thực hiện gửi 100 requests chuyển tiền giống hệt nhau cùng một lúc, hệ thống chỉ trừ tiền đúng 1 lần duy nhất.
 3. **Hiệu năng gRPC:** Giao tiếp giữa Transaction Engine và Ledger Service chạy qua gRPC mượt mà trên VPS.
